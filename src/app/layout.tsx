@@ -1,0 +1,76 @@
+import type { Metadata } from "next";
+import { Vazirmatn } from "next/font/google";
+import "./globals.css";
+import { AppProvider } from "@/context/AppContext";
+import Header from "@/components/Header";
+import BreakingTicker from "@/components/BreakingTicker";
+import Footer from "@/components/Footer";
+import SearchModal from "@/components/SearchModal";
+import Toast from "@/components/Toast";
+import ScrollToTop from "@/components/ScrollToTop";
+
+const vazirmatn = Vazirmatn({
+  subsets: ["arabic", "latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-vazirmatn",
+});
+
+export const metadata: Metadata = {
+  title: "کوردتێک | KurdTech - یەکەمین مەگەزینی تەکنەلۆژیا و هەواڵی زیرەکی دەستکرد لە کوردستان",
+  description:
+    "نوێترین هەواڵەکانی تەکنەلۆژیا، زیرەکی دەستکرد، مۆبایل، پێداچوونەوە و نرخی ئامێرەکان لە بازاڕەکانی هەولێر، سلێمانی و دهۆک",
+  keywords: ["کوردتێک", "KurdTech", "مۆبایل", "ئایفۆن", "سامسۆنگ", "نرخی دۆلار", "زیرەکی دەستکرد", "گەیمینگ", "کوردستان"],
+  authors: [{ name: "تیمی تەکنیکی کوردتێک" }],
+  openGraph: {
+    title: "کوردتێک | KurdTech - مەگەزینی تەکنەلۆژیای کوردستان",
+    description: "نوێترین هەواڵەکانی تەکنەلۆژیا، پێداچوونەوەی ڕەقەواڵە و نرخی ئامێرەکان لە کوردستان",
+    siteName: "KurdTech",
+    locale: "ckb_IQ",
+    type: "website",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="ckb" dir="rtl" className="dark scroll-smooth" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const savedTheme = localStorage.getItem('kurdtech_theme');
+                if (savedTheme === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else if (savedTheme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
+      <body
+        className={`${vazirmatn.variable} font-sans bg-slate-50 dark:bg-[#0b0f17] text-slate-900 dark:text-slate-100 antialiased selection:bg-purple-600 selection:text-white min-h-screen flex flex-col transition-colors duration-200 relative overflow-x-hidden`}
+      >
+        {/* Ambient Glow Aurora Meshes */}
+        <div className="fixed top-0 right-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 dark:bg-purple-600/15 rounded-full blur-[140px] pointer-events-none -z-10" />
+        <div className="fixed top-32 left-10 w-[450px] h-[450px] bg-indigo-600/10 dark:bg-indigo-600/12 rounded-full blur-[160px] pointer-events-none -z-10" />
+        <div className="fixed bottom-10 right-10 w-[400px] h-[400px] bg-fuchsia-600/5 dark:bg-fuchsia-600/8 rounded-full blur-[160px] pointer-events-none -z-10" />
+
+        <AppProvider>
+          <BreakingTicker />
+          <Header />
+          <div className="flex-1 flex flex-col">{children}</div>
+          <Footer />
+          <SearchModal />
+          <Toast />
+          <ScrollToTop />
+        </AppProvider>
+      </body>
+    </html>
+  );
+}
