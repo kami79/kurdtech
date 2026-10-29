@@ -24,10 +24,12 @@ import {
   Pause,
   RotateCcw,
   Type,
+  Instagram,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import ArticleCard from "@/components/ArticleCard";
 import MarketPricesWidget from "@/components/MarketPricesWidget";
+import SocialPublisherModal from "@/components/SocialPublisherModal";
 import { Comment } from "@/types";
 import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 
@@ -47,9 +49,11 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
     setFontSize,
     addToHistory,
     isLoadingArticles,
+    isAdmin,
   } = useApp();
 
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isSocialStudioOpen, setIsSocialStudioOpen] = useState(false);
   const article = getArticle(id);
 
   // Reading progress state
@@ -471,6 +475,21 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
               {/* Share Buttons */}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400 font-bold hidden sm:inline">هاوبەشکردن:</span>
+                {isAdmin && (
+                  <button
+                    onClick={() => setIsSocialStudioOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    <Instagram className="w-3.5 h-3.5" />
+                    <span>ئینستاگرام و سۆشیاڵ</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => handleShare("facebook")}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+                >
+                  فەیسبووک
+                </button>
                 <button
                   onClick={() => handleShare("whatsapp")}
                   className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors"
@@ -748,6 +767,12 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
             </div>
           </aside>
         </div>
+        <SocialPublisherModal
+          article={article}
+          isOpen={isSocialStudioOpen}
+          onClose={() => setIsSocialStudioOpen(false)}
+          onShowToast={showToast}
+        />
       </article>
     </>
   );
