@@ -419,10 +419,10 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
             {/* Main Featured Image */}
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200/50 dark:border-slate-800">
               <img
-                src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+                src={getSafeImageUrl(article.imageUrl, article.categorySlug, `${article.title} ${article.id}`)}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug, `${article.title} ${article.id}`);
                 }}
                 alt={article.title}
                 className="w-full h-80 sm:h-[450px] object-cover"
@@ -718,10 +718,10 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
                     className="group flex items-start gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                   >
                     <img
-                      src={getSafeImageUrl(rel.imageUrl, rel.categorySlug)}
+                      src={getSafeImageUrl(rel.imageUrl, rel.categorySlug, `${rel.title} ${rel.id}`)}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        e.currentTarget.src = getCategoryFallbackImage(rel.categorySlug);
+                        e.currentTarget.src = getCategoryFallbackImage(rel.categorySlug, `${rel.title} ${rel.id}`);
                       }}
                       alt={rel.title}
                       className="w-20 h-16 rounded-xl object-cover shrink-0 group-hover:scale-105 transition-transform"

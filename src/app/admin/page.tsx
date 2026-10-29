@@ -129,7 +129,7 @@ export default function AdminStudioPage() {
   const [categorySlug, setCategorySlug] = useState("ai");
   const [authorName, setAuthorName] = useState("ئارام کامەران");
   const [authorRole, setAuthorRole] = useState("سەرنووسەری بەشی ڕەقەواڵە");
-  const [imageUrl, setImageUrl] = useState(IMAGE_PRESETS[0].url);
+  const [imageUrl, setImageUrl] = useState("");
   const [isBreaking, setIsBreaking] = useState(false);
   const [isEditorPick, setIsEditorPick] = useState(false);
   const [featuredPosition, setFeaturedPosition] = useState<
@@ -230,7 +230,7 @@ export default function AdminStudioPage() {
     setExcerpt("");
     setContent("");
     setCategorySlug("ai");
-    setImageUrl(IMAGE_PRESETS[0].url);
+    setImageUrl("");
     setIsBreaking(false);
     setIsEditorPick(false);
     setFeaturedPosition("none");
@@ -287,7 +287,9 @@ export default function AdminStudioPage() {
         avatar:
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
       },
-      imageUrl: imageUrl.trim() || IMAGE_PRESETS[0].url,
+      imageUrl:
+        imageUrl.trim() ||
+        getCategoryFallbackImage(categorySlug, `${title.trim()} ${Date.now()}`),
       isBreaking,
       isEditorPick,
       featuredPosition:

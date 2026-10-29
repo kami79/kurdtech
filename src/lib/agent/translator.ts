@@ -1,4 +1,5 @@
 import { RawNewsItem } from "./feedParser";
+import { getSafeImageUrl } from "@/lib/imageUtils";
 import { Article } from "@/types";
 
 export interface TranslatedArticleDraft {
@@ -491,7 +492,7 @@ export async function translateWithNeuralKurdishEngine(
     category: categoryName,
     categorySlug,
     tags: uniqueTags,
-    imageUrl: item.imageUrl || CATEGORY_DEFAULT_IMAGES[categorySlug],
+    imageUrl: getSafeImageUrl(item.imageUrl, categorySlug, `${item.title} ${item.id}`),
     isBreaking,
     author: {
       name: "ئەیجێنتی هۆشمەندی کوردتێک",
@@ -598,7 +599,11 @@ Strictly output valid JSON:
       categorySlug: parsed.categorySlug || item.categorySlug,
       category: CATEGORY_NAMES[parsed.categorySlug as keyof typeof CATEGORY_NAMES] || item.defaultCategory,
       tags: parsed.tags || ["تەکنەلۆژیا", item.sourceName],
-      imageUrl: item.imageUrl || CATEGORY_DEFAULT_IMAGES[item.categorySlug],
+      imageUrl: getSafeImageUrl(
+        item.imageUrl,
+        parsed.categorySlug || item.categorySlug,
+        `${item.title} ${item.id}`
+      ),
       isBreaking: !!parsed.isBreaking,
       author: {
         name: "ئەیجێنتی هۆشمەندی کوردتێک",

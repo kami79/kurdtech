@@ -40,27 +40,42 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
-// Extract image url from RSS/Atom block
+// Extract image url from RSS/Atom block (handles both raw XML and HTML-escaped content)
 function extractImageUrl(block: string): string | undefined {
+  const decoded = block
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#038;|&#38;|&amp;/gi, "&");
+
   // 1. media:content or media:thumbnail url="..."
-  const mediaMatch = /<media:(?:content|thumbnail)[^>]+url=["'](https?:\/\/[^"']+)["']/i.exec(block);
+  const mediaMatch = /<media:(?:content|thumbnail)[^>]+url=["'](https?:\/\/[^"']+)["']/i.exec(decoded);
   if (mediaMatch) return mediaMatch[1];
 
   // 2. enclosure url="..." (with image MIME or extension)
-  const enclosureMatch = /<enclosure[^>]+url=["'](https?:\/\/[^"']+)["'][^>]*type=["']image\//i.exec(block);
+  const enclosureMatch = /<enclosure[^>]+url=["'](https?:\/\/[^"']+)["'][^>]*type=["']image\//i.exec(decoded);
   if (enclosureMatch) return enclosureMatch[1];
 
   // 3. Fallback enclosure without strict mime check
-  const anyEnclosure = /<enclosure[^>]+url=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|avif)[^"']*)["']/i.exec(block);
+  const anyEnclosure = /<enclosure[^>]+url=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|avif)[^"']*)["']/i.exec(decoded);
   if (anyEnclosure) return anyEnclosure[1];
 
   // 4. img tag in description or content
-  const imgMatch = /<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|avif)[^"']*)["']/i.exec(block);
-  if (imgMatch) return imgMatch[1];
+  const imgMatch = /<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|avif)[^"']*)["']/i.exec(decoded);
+  if (imgMatch && !imgMatch[1].includes("avatar") && !imgMatch[1].includes("icon") && !imgMatch[1].includes("1x1")) {
+    return imgMatch[1];
+  }
 
   // 5. generic img
-  const genericImg = /<img[^>]+src=["'](https?:\/\/[^"']+)["']/i.exec(block);
-  if (genericImg && !genericImg[1].includes("avatar") && !genericImg[1].includes("icon")) {
+  const genericImg = /<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"']+)["']/i.exec(decoded);
+  if (
+    genericImg &&
+    !genericImg[1].includes("avatar") &&
+    !genericImg[1].includes("icon") &&
+    !genericImg[1].includes("pixel") &&
+    !genericImg[1].includes("1x1")
+  ) {
     return genericImg[1];
   }
 

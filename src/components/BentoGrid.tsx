@@ -22,10 +22,10 @@ export default function BentoGrid({ mainArticle, sideArticles }: BentoGridProps)
         <div className="lg:col-span-7 group relative h-[400px] sm:h-[500px] rounded-3xl overflow-hidden border border-slate-200/40 dark:border-purple-900/30 shadow-xl hover:shadow-2xl hover:shadow-purple-600/20 transition-all duration-500">
           <Link href={`/articles/${mainArticle.id}`} className="block w-full h-full">
             <img
-              src={getSafeImageUrl(mainArticle.imageUrl, mainArticle.categorySlug)}
+              src={getSafeImageUrl(mainArticle.imageUrl, mainArticle.categorySlug, `${mainArticle.title} ${mainArticle.id}`)}
               referrerPolicy="no-referrer"
               onError={(e) => {
-                e.currentTarget.src = getCategoryFallbackImage(mainArticle.categorySlug);
+                e.currentTarget.src = getCategoryFallbackImage(mainArticle.categorySlug, `${mainArticle.title} ${mainArticle.id}`);
               }}
               alt={mainArticle.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
@@ -127,10 +127,10 @@ export default function BentoGrid({ mainArticle, sideArticles }: BentoGridProps)
             >
               <Link href={`/articles/${story.id}`} className="block w-full h-full">
                 <img
-                  src={getSafeImageUrl(story.imageUrl, story.categorySlug)}
+                  src={getSafeImageUrl(story.imageUrl, story.categorySlug, `${story.title} ${story.id}`)}
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    e.currentTarget.src = getCategoryFallbackImage(story.categorySlug);
+                    e.currentTarget.src = getCategoryFallbackImage(story.categorySlug, `${story.title} ${story.id}`);
                   }}
                   alt={story.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"

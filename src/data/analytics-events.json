@@ -69,6 +69,56 @@
       "path": "/",
       "device": "desktop",
       "referrer": "ڕاستەوخۆ (Direct)"
+    },
+    {
+      "id": "ev-1793305932703-3ylk",
+      "timestamp": 1793305932703,
+      "dateKey": "2026-10-29",
+      "hourKey": 23,
+      "visitorId": "v-1793305632078-lug66mk",
+      "path": "/",
+      "device": "desktop",
+      "referrer": "ڕاستەوخۆ (Direct)"
+    },
+    {
+      "id": "ev-1793305937429-wbak",
+      "timestamp": 1793305937429,
+      "dateKey": "2026-10-29",
+      "hourKey": 23,
+      "visitorId": "v-1793305632078-lug66mk",
+      "path": "/",
+      "device": "desktop",
+      "referrer": "ڕاستەوخۆ (Direct)"
+    },
+    {
+      "id": "ev-1793305941456-vg9o",
+      "timestamp": 1793305941456,
+      "dateKey": "2026-10-29",
+      "hourKey": 23,
+      "visitorId": "v-1793305632078-lug66mk",
+      "path": "/",
+      "device": "desktop",
+      "referrer": "ڕاستەوخۆ (Direct)"
+    },
+    {
+      "id": "ev-1793305965837-xv67",
+      "timestamp": 1793305965837,
+      "dateKey": "2026-10-29",
+      "hourKey": 23,
+      "visitorId": "v-1793305632078-lug66mk",
+      "path": "/admin",
+      "device": "desktop",
+      "referrer": "ڕاستەوخۆ (Direct)"
+    },
+    {
+      "id": "ev-1793305975378-mqsj",
+      "timestamp": 1793305975378,
+      "dateKey": "2026-10-29",
+      "hourKey": 23,
+      "visitorId": "v-1793305632078-lug66mk",
+      "path": "/",
+      "device": "desktop",
+      "referrer": "ڕاستەوخۆ (Direct)"
     }
   ]
 }

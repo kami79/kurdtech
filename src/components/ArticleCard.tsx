@@ -44,10 +44,10 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
           <div className="relative h-48 w-full overflow-hidden">
             <Link href={`/articles/${article.id}`} className="block w-full h-full">
               <img
-                src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+                src={getSafeImageUrl(article.imageUrl, article.categorySlug, `${article.title} ${article.id}`)}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug, `${article.title} ${article.id}`);
                 }}
                 alt={article.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -148,10 +148,10 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
       <div className="relative sm:w-64 sm:h-44 h-52 shrink-0 rounded-2xl overflow-hidden">
         <Link href={`/articles/${article.id}`} className="block w-full h-full">
           <img
-            src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+            src={getSafeImageUrl(article.imageUrl, article.categorySlug, `${article.title} ${article.id}`)}
             referrerPolicy="no-referrer"
             onError={(e) => {
-              e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+              e.currentTarget.src = getCategoryFallbackImage(article.categorySlug, `${article.title} ${article.id}`);
             }}
             alt={article.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
