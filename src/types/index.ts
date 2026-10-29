@@ -38,6 +38,10 @@ export interface Article {
   cons?: string[];
   specs?: Record<string, string>;
   extractedMetrics?: string[];
+  originalSource?: {
+    name: string;
+    url: string;
+  };
 }
 
 export interface Category {

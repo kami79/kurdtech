@@ -1,7 +1,10 @@
 import { MetadataRoute } from "next";
-import { ARTICLES, CATEGORIES } from "@/data/articles";
+import { CATEGORIES } from "@/data/articles";
+import { getMergedArticles } from "@/lib/articleStore";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export const revalidate = 3600; // revalidate hourly
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://kurdtech.org";
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -68,7 +71,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  const articleRoutes: MetadataRoute.Sitemap = ARTICLES.map((art) => ({
+  const allArticles = await getMergedArticles();
+  const articleRoutes: MetadataRoute.Sitemap = allArticles.map((art) => ({
     url: `${baseUrl}/articles/${art.id}`,
     lastModified: art.publishedDateIso ? new Date(art.publishedDateIso) : new Date(),
     changeFrequency: "weekly",

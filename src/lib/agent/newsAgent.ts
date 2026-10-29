@@ -2,35 +2,29 @@ import { curateTopTechNews } from "./curator";
 import { RawNewsItem } from "./feedParser";
 import { translateNewsStory, TranslatedArticleDraft } from "./translator";
 import { Article } from "@/types";
-import fs from "fs/promises";
-import path from "path";
-
-const DATA_DIR = path.join(process.cwd(), "src", "data");
-const CUSTOM_ARTICLES_FILE = path.join(DATA_DIR, "custom-articles.json");
+import {
+  CUSTOM_ARTICLES_FILE,
+  readCustomArticles,
+  withWriteLock,
+  writeJsonFile,
+} from "@/lib/articleStore";
 
 // Save article directly to persistent storage
 async function saveArticleToDisk(article: Article): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  await withWriteLock(async () => {
+    const existing = await readCustomArticles();
 
-  let existing: Article[] = [];
-  try {
-    const raw = await fs.readFile(CUSTOM_ARTICLES_FILE, "utf-8");
-    existing = JSON.parse(raw);
-  } catch {
-    existing = [];
-  }
+    // Check if article with same title already exists to avoid duplicate publishing
+    const alreadyExists = existing.some(
+      (a) =>
+        a.title.toLowerCase().trim() === article.title.toLowerCase().trim() ||
+        a.id === article.id
+    );
 
-  // Check if article with same title already exists to avoid duplicate publishing
-  const alreadyExists = existing.some(
-    (a) =>
-      a.title.toLowerCase().trim() === article.title.toLowerCase().trim() ||
-      a.id === article.id
-  );
-
-  if (!alreadyExists) {
-    const updated = [article, ...existing];
-    await fs.writeFile(CUSTOM_ARTICLES_FILE, JSON.stringify(updated, null, 2), "utf-8");
-  }
+    if (!alreadyExists) {
+      await writeJsonFile(CUSTOM_ARTICLES_FILE, [article, ...existing]);
+    }
+  });
 }
 
 // Full workflow: Scan, Rank and Translate into Drafts with offset & refresh rotation
@@ -52,13 +46,7 @@ export async function getCuratedKurdishDrafts(
   totalAvailable: number;
   nextOffset: number;
 }> {
-  let existing: Article[] = [];
-  try {
-    const raw = await fs.readFile(CUSTOM_ARTICLES_FILE, "utf-8");
-    existing = JSON.parse(raw);
-  } catch {
-    existing = [];
-  }
+  const existing = await readCustomArticles();
 
   const { topStories, allStories, sourceStats, scannedAt, totalAvailable, nextOffset } =
     await curateTopTechNews(
@@ -103,13 +91,16 @@ export async function getCuratedKurdishDrafts(
   };
 }
 
-// Publish single curated draft to the portal
+// Publish single curated draft to the portal.
+// Pass `preTranslated` when the draft was already generated (avoids a second,
+// possibly billable, translation call and keeps what the editor previewed).
 export async function publishDraftToPortal(
   raw: RawNewsItem,
   apiKey?: string,
-  overrides?: Partial<Article>
+  overrides?: Partial<Article>,
+  preTranslated?: TranslatedArticleDraft
 ): Promise<Article> {
-  const draft = await translateNewsStory(raw, apiKey);
+  const draft: TranslatedArticleDraft = preTranslated ?? (await translateNewsStory(raw, apiKey));
 
   const newArticle: Article = {
     id: `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -136,6 +127,10 @@ export async function publishDraftToPortal(
     featuredPosition: overrides?.featuredPosition || (draft.isBreaking ? "top-left" : undefined),
     pros: [],
     cons: [],
+    extractedMetrics: overrides?.extractedMetrics || draft.extractedMetrics,
+    originalSource:
+      draft.originalSource ||
+      (raw.originalLink ? { name: raw.sourceName, url: raw.originalLink } : undefined),
   };
 
   await saveArticleToDisk(newArticle);
@@ -151,16 +146,12 @@ export async function runAutonomousDailyAgent(
   count: number;
   message: string;
 }> {
-  const { drafts } = await getCuratedKurdishDrafts(count, apiKey);
+  const { drafts } = await getCuratedKurdishDrafts(count, apiKey, 0, undefined, undefined, true);
 
   const published: Article[] = [];
   for (const item of drafts) {
-    const art = await publishDraftToPortal(item.raw, apiKey, {
-      title: item.draft.title,
-      excerpt: item.draft.excerpt,
-      content: item.draft.content,
-      isBreaking: item.draft.isBreaking,
-    });
+    if (item.isAlreadyPublished) continue;
+    const art = await publishDraftToPortal(item.raw, apiKey, undefined, item.draft);
     published.push(art);
   }
 
@@ -179,13 +170,7 @@ export async function syncLatestTopNews(
   try {
     const { topStories } = await curateTopTechNews(limit + 2);
 
-    let existing: Article[] = [];
-    try {
-      const raw = await fs.readFile(CUSTOM_ARTICLES_FILE, "utf-8");
-      existing = JSON.parse(raw);
-    } catch {
-      existing = [];
-    }
+    const existing = await readCustomArticles();
 
     const newArticles: Article[] = [];
 

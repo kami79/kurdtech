@@ -1,53 +1,102 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ARTICLES } from "@/data/articles";
 import { Article } from "@/types";
-import { syncLatestTopNews } from "@/lib/agent/newsAgent";
-import fs from "fs/promises";
-import path from "path";
+import {
+  CUSTOM_ARTICLES_FILE,
+  DELETED_IDS_FILE,
+  getMergedArticles,
+  readCustomArticles,
+  readDeletedIds,
+  withWriteLock,
+  writeJsonFile,
+} from "@/lib/articleStore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const DATA_DIR = path.join(process.cwd(), "src", "data");
-const CUSTOM_ARTICLES_FILE = path.join(DATA_DIR, "custom-articles.json");
-const DELETED_IDS_FILE = path.join(DATA_DIR, "deleted-articles.json");
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+};
 
-// Helper to safely read JSON file
-async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
-  try {
-    const data = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(data) as T;
-  } catch {
-    return fallback;
-  }
+const FEATURED_POSITIONS = ["main", "top-left", "bottom-right", "bottom-left"] as const;
+
+const isStr = (v: unknown): v is string => typeof v === "string";
+const strArray = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter(isStr).map((s) => s.trim()).filter(Boolean) : undefined;
+
+function normalizeContent(v: unknown): string[] | undefined {
+  if (Array.isArray(v)) return strArray(v);
+  if (isStr(v)) return v.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return undefined;
 }
 
-// Helper to safely write JSON file
-async function writeJsonFile(filePath: string, data: any): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
-}
+/**
+ * Whitelist & type-check incoming article fields so clients can't inject
+ * arbitrary keys (or change the id) through POST/PUT.
+ */
+function sanitizeArticleInput(body: any): Partial<Article> {
+  const out: Partial<Article> = {};
+  if (!body || typeof body !== "object") return out;
 
-// Merge default articles with custom & deleted ones
-async function getMergedArticles(): Promise<Article[]> {
-  const customArticles = await readJsonFile<Article[]>(CUSTOM_ARTICLES_FILE, []);
-  const deletedIds = await readJsonFile<string[]>(DELETED_IDS_FILE, []);
-
-  // Map of custom articles by id (custom articles take precedence)
-  const customMap = new Map<string, Article>();
-  for (const art of customArticles) {
-    if (!deletedIds.includes(art.id)) {
-      customMap.set(art.id, art);
-    }
+  if (isStr(body.title)) out.title = body.title.trim();
+  if (isStr(body.excerpt)) out.excerpt = body.excerpt.trim();
+  const content = normalizeContent(body.content);
+  if (content) out.content = content;
+  if (isStr(body.category)) out.category = body.category.trim();
+  if (isStr(body.categorySlug)) out.categorySlug = body.categorySlug.trim();
+  const tags = strArray(body.tags);
+  if (tags) out.tags = tags;
+  if (body.author && typeof body.author === "object" && isStr(body.author.name)) {
+    out.author = {
+      name: body.author.name,
+      role: isStr(body.author.role) ? body.author.role : "",
+      avatar: isStr(body.author.avatar) ? body.author.avatar : "",
+      ...(isStr(body.author.bio) ? { bio: body.author.bio } : {}),
+    };
   }
-
-  // Filter default articles: skip deleted ones, and skip ones overridden by custom
-  const remainingDefaults = ARTICLES.filter(
-    (art) => !deletedIds.includes(art.id) && !customMap.has(art.id)
-  );
-
-  // Return custom articles first, followed by default articles
-  return [...Array.from(customMap.values()), ...remainingDefaults];
+  if (isStr(body.publishedAt)) out.publishedAt = body.publishedAt;
+  if (isStr(body.publishedDateIso)) out.publishedDateIso = body.publishedDateIso;
+  if (isStr(body.readTime)) out.readTime = body.readTime;
+  if (isStr(body.views)) out.views = body.views;
+  if (typeof body.likesCount === "number") out.likesCount = body.likesCount;
+  if (typeof body.commentsCount === "number") out.commentsCount = body.commentsCount;
+  if (Array.isArray(body.comments)) out.comments = body.comments;
+  if (isStr(body.imageUrl) && /^https?:\/\//i.test(body.imageUrl.trim())) {
+    out.imageUrl = body.imageUrl.trim();
+  }
+  if ("featuredPosition" in body) {
+    out.featuredPosition = FEATURED_POSITIONS.includes(body.featuredPosition)
+      ? body.featuredPosition
+      : undefined;
+  }
+  if (typeof body.isBreaking === "boolean") out.isBreaking = body.isBreaking;
+  if (typeof body.isEditorPick === "boolean") out.isEditorPick = body.isEditorPick;
+  if ("reviewScore" in body) {
+    const n = Number(body.reviewScore);
+    out.reviewScore =
+      body.reviewScore !== null && body.reviewScore !== "" && Number.isFinite(n)
+        ? Math.min(10, Math.max(0, n))
+        : undefined;
+  }
+  const pros = strArray(body.pros);
+  if (pros) out.pros = pros;
+  const cons = strArray(body.cons);
+  if (cons) out.cons = cons;
+  if (body.specs && typeof body.specs === "object" && !Array.isArray(body.specs)) {
+    out.specs = body.specs;
+  }
+  const metrics = strArray(body.extractedMetrics);
+  if (metrics) out.extractedMetrics = metrics;
+  if (
+    body.originalSource &&
+    typeof body.originalSource === "object" &&
+    isStr(body.originalSource.name) &&
+    isStr(body.originalSource.url)
+  ) {
+    out.originalSource = { name: body.originalSource.name, url: body.originalSource.url };
+  }
+  return out;
 }
 
 // GET /api/articles
@@ -73,9 +122,9 @@ export async function GET(request: NextRequest) {
       const q = query.toLowerCase().trim();
       results = results.filter(
         (a) =>
-          a.title.toLowerCase().includes(q) ||
-          a.excerpt.toLowerCase().includes(q) ||
-          a.category.toLowerCase().includes(q) ||
+          a.title?.toLowerCase().includes(q) ||
+          a.excerpt?.toLowerCase().includes(q) ||
+          a.category?.toLowerCase().includes(q) ||
           (a.tags && a.tags.some((t) => t.toLowerCase().includes(q)))
       );
     }
@@ -88,17 +137,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      {
-        status: "success",
-        total: results.length,
-        data: results,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          Pragma: "no-cache",
-        },
-      }
+      { status: "success", total: results.length, data: results },
+      { headers: NO_CACHE_HEADERS }
     );
   } catch (err: any) {
     return NextResponse.json(
@@ -112,68 +152,71 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const input = sanitizeArticleInput(body);
 
-    if (!body.title || !body.excerpt) {
+    if (!input.title || !input.excerpt) {
       return NextResponse.json(
         { status: "error", message: "Title and excerpt are required" },
         { status: 400 }
       );
     }
 
-    const customArticles = await readJsonFile<Article[]>(CUSTOM_ARTICLES_FILE, []);
-    const deletedIds = await readJsonFile<string[]>(DELETED_IDS_FILE, []);
-
     const newId =
-      body.id ||
-      `art-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-    // Remove from deleted list if ID was reused
-    const updatedDeleted = deletedIds.filter((id) => id !== newId);
-    if (updatedDeleted.length !== deletedIds.length) {
-      await writeJsonFile(DELETED_IDS_FILE, updatedDeleted);
-    }
+      isStr(body.id) && body.id.trim()
+        ? body.id.trim()
+        : `art-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const newArticle: Article = {
       id: newId,
-      title: body.title.trim(),
-      excerpt: body.excerpt.trim(),
-      content: Array.isArray(body.content)
-        ? body.content
-        : typeof body.content === "string"
-        ? body.content.split("\n\n").filter(Boolean)
-        : [body.excerpt.trim()],
-      category: body.category || "هەواڵ",
-      categorySlug: body.categorySlug || "ai",
-      tags: body.tags || ["تەکنەلۆژیا", "کوردتێک"],
-      author: body.author || {
+      title: input.title,
+      excerpt: input.excerpt,
+      content: input.content && input.content.length > 0 ? input.content : [input.excerpt],
+      category: input.category || "هەواڵ",
+      categorySlug: input.categorySlug || "ai",
+      tags: input.tags && input.tags.length > 0 ? input.tags : ["تەکنەلۆژیا", "کوردتێک"],
+      author: input.author || {
         name: "ئارام کامەران",
         role: "نووسەری تیمی تەکنیکی",
         avatar:
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
         bio: "نووسەری تەکنیکی لە کوردتێک",
       },
-      publishedAt: body.publishedAt || "ئێستا",
-      publishedDateIso: body.publishedDateIso || new Date().toISOString(),
-      readTime: body.readTime || "٤ خولەک",
-      views: body.views || "١ بینین",
-      likesCount: body.likesCount ?? 0,
-      commentsCount: body.commentsCount ?? 0,
-      comments: body.comments || [],
+      publishedAt: input.publishedAt || "ئێستا",
+      publishedDateIso: input.publishedDateIso || new Date().toISOString(),
+      readTime: input.readTime || "٤ خولەک",
+      views: input.views || "١ بینین",
+      likesCount: input.likesCount ?? 0,
+      commentsCount: input.commentsCount ?? 0,
+      comments: input.comments || [],
       imageUrl:
-        body.imageUrl ||
+        input.imageUrl ||
         "https://images.unsplash.com/photo-1518770660439-4636190af475?w=900&auto=format&fit=crop&q=80",
-      featuredPosition: body.featuredPosition || undefined,
-      isBreaking: body.isBreaking ?? false,
-      isEditorPick: body.isEditorPick ?? false,
-      reviewScore: body.reviewScore ?? undefined,
-      pros: body.pros || [],
-      cons: body.cons || [],
-      specs: body.specs || undefined,
+      featuredPosition: input.featuredPosition,
+      isBreaking: input.isBreaking ?? false,
+      isEditorPick: input.isEditorPick ?? false,
+      reviewScore: input.reviewScore,
+      pros: input.pros || [],
+      cons: input.cons || [],
+      specs: input.specs,
+      extractedMetrics: input.extractedMetrics,
+      originalSource: input.originalSource,
     };
 
-    // Prepend to custom articles
-    const updatedCustom = [newArticle, ...customArticles.filter((a) => a.id !== newId)];
-    await writeJsonFile(CUSTOM_ARTICLES_FILE, updatedCustom);
+    await withWriteLock(async () => {
+      const [customArticles, deletedIds] = await Promise.all([
+        readCustomArticles(),
+        readDeletedIds(),
+      ]);
+
+      // Remove from deleted list if ID was reused
+      const updatedDeleted = deletedIds.filter((id) => id !== newId);
+      if (updatedDeleted.length !== deletedIds.length) {
+        await writeJsonFile(DELETED_IDS_FILE, updatedDeleted);
+      }
+
+      const updatedCustom = [newArticle, ...customArticles.filter((a) => a.id !== newId)];
+      await writeJsonFile(CUSTOM_ARTICLES_FILE, updatedCustom);
+    });
 
     return NextResponse.json({
       status: "success",
@@ -192,7 +235,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, ...updates } = body;
+    const id = isStr(body?.id) ? body.id : "";
 
     if (!id) {
       return NextResponse.json(
@@ -201,45 +244,38 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const customArticles = await readJsonFile<Article[]>(CUSTOM_ARTICLES_FILE, []);
-    const existingIndex = customArticles.findIndex((a) => a.id === id);
+    const updates = sanitizeArticleInput(body);
+    // Don't let an update blank out required fields
+    if (updates.title === "") delete updates.title;
+    if (updates.excerpt === "") delete updates.excerpt;
+    if (updates.content && updates.content.length === 0) delete updates.content;
 
-    let updatedArticle: Article;
+    const updatedArticle = await withWriteLock(async () => {
+      const customArticles = await readCustomArticles();
+      const existingIndex = customArticles.findIndex((a) => a.id === id);
 
-    if (existingIndex >= 0) {
-      // Exists in custom articles
-      const current = customArticles[existingIndex];
-      updatedArticle = {
-        ...current,
-        ...updates,
-        content: Array.isArray(updates.content)
-          ? updates.content
-          : typeof updates.content === "string"
-          ? updates.content.split("\n\n").filter(Boolean)
-          : current.content,
-      };
-      customArticles[existingIndex] = updatedArticle;
-      await writeJsonFile(CUSTOM_ARTICLES_FILE, customArticles);
-    } else {
+      if (existingIndex >= 0) {
+        const merged: Article = { ...customArticles[existingIndex], ...updates, id };
+        customArticles[existingIndex] = merged;
+        await writeJsonFile(CUSTOM_ARTICLES_FILE, customArticles);
+        return merged;
+      }
+
       // Might be a default article being customized/overridden
       const defaultArt = ARTICLES.find((a) => a.id === id);
-      if (!defaultArt) {
-        return NextResponse.json(
-          { status: "error", message: "Article not found" },
-          { status: 404 }
-        );
-      }
-      updatedArticle = {
-        ...defaultArt,
-        ...updates,
-        content: Array.isArray(updates.content)
-          ? updates.content
-          : typeof updates.content === "string"
-          ? updates.content.split("\n\n").filter(Boolean)
-          : defaultArt.content,
-      };
-      customArticles.unshift(updatedArticle);
+      if (!defaultArt) return null;
+
+      const merged: Article = { ...defaultArt, ...updates, id };
+      customArticles.unshift(merged);
       await writeJsonFile(CUSTOM_ARTICLES_FILE, customArticles);
+      return merged;
+    });
+
+    if (!updatedArticle) {
+      return NextResponse.json(
+        { status: "error", message: "Article not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -264,7 +300,7 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       try {
         const body = await request.json();
-        id = body.id;
+        id = isStr(body?.id) ? body.id : null;
       } catch {
         // no body
       }
@@ -277,22 +313,29 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Remove from custom articles
-    const customArticles = await readJsonFile<Article[]>(CUSTOM_ARTICLES_FILE, []);
-    const filteredCustom = customArticles.filter((a) => a.id !== id);
-    await writeJsonFile(CUSTOM_ARTICLES_FILE, filteredCustom);
+    const targetId = id;
+    await withWriteLock(async () => {
+      // Remove from custom articles
+      const customArticles = await readCustomArticles();
+      const filteredCustom = customArticles.filter((a) => a.id !== targetId);
+      if (filteredCustom.length !== customArticles.length) {
+        await writeJsonFile(CUSTOM_ARTICLES_FILE, filteredCustom);
+      }
 
-    // Also record in deletedIds so default articles can be deleted
-    const deletedIds = await readJsonFile<string[]>(DELETED_IDS_FILE, []);
-    if (!deletedIds.includes(id)) {
-      deletedIds.push(id);
-      await writeJsonFile(DELETED_IDS_FILE, deletedIds);
-    }
+      // Only default (built-in) articles need a tombstone; custom ones are simply removed.
+      if (ARTICLES.some((a) => a.id === targetId)) {
+        const deletedIds = await readDeletedIds();
+        if (!deletedIds.includes(targetId)) {
+          deletedIds.push(targetId);
+          await writeJsonFile(DELETED_IDS_FILE, deletedIds);
+        }
+      }
+    });
 
     return NextResponse.json({
       status: "success",
       message: "Article deleted successfully",
-      id,
+      id: targetId,
     });
   } catch (err: any) {
     return NextResponse.json(

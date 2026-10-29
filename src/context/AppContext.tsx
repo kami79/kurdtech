@@ -274,7 +274,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const json = await res.json();
       if (json.status === "success" && json.data) {
         const created: Article = json.data;
-        setArticles((prev) => [created, ...prev.filter((a) => a.id !== created.id)]);
+        setArticles((prev) => {
+          const next = [created, ...prev.filter((a) => a.id !== created.id)];
+          try {
+            localStorage.setItem("kurdtech_cached_articles", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
 
         // If it's breaking, add to breaking news
         if (created.isBreaking) {
@@ -308,7 +314,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const json = await res.json();
       if (json.status === "success" && json.data) {
         const updated: Article = json.data;
-        setArticles((prev) => prev.map((a) => (a.id === id ? updated : a)));
+        setArticles((prev) => {
+          const next = prev.map((a) => (a.id === id ? updated : a));
+          try {
+            localStorage.setItem("kurdtech_cached_articles", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
 
         showToast("گۆڕانکارییەکانی بابەت بە سەرکەوتوویی نوێکرانەوە!", "success");
         return updated;
@@ -332,7 +344,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         throw new Error("سێرڤەر نەیتوانی بابەتەکە بسڕێتەوە");
       }
 
-      setArticles((prev) => prev.filter((a) => a.id !== id));
+      setArticles((prev) => {
+        const next = prev.filter((a) => a.id !== id);
+        try {
+          localStorage.setItem("kurdtech_cached_articles", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       showToast("بابەتەکە لە ماڵپەڕەکە سڕایەوە", "info");
       return true;
     } catch (e: any) {

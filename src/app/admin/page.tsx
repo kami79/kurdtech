@@ -408,6 +408,7 @@ export default function AdminStudioPage() {
         body: JSON.stringify({
           action: "publish-single",
           rawItem: item.raw,
+          draft: item.draft,
           overrides: {
             title: item.draft.title,
             excerpt: item.draft.excerpt,

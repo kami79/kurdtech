@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, rawItem, overrides, count = 3, apiKey } = body;
+    const { action, rawItem, overrides, draft, count = 3, apiKey } = body;
 
     if (action === "publish-single") {
       if (!rawItem) {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const publishedArticle = await publishDraftToPortal(rawItem, apiKey, overrides);
+      const publishedArticle = await publishDraftToPortal(rawItem, apiKey, overrides, draft);
 
       return NextResponse.json({
         status: "success",

@@ -548,11 +548,16 @@ Strictly output valid JSON:
   "isBreaking": false
 }`;
 
+    const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Send the key as a header so it never appears in URLs/proxy logs
+          "x-goog-api-key": apiKey,
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
@@ -560,10 +565,16 @@ Strictly output valid JSON:
             responseMimeType: "application/json",
           },
         }),
+        signal: AbortSignal.timeout(30_000),
+        cache: "no-store",
       }
     );
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.warn(`Gemini API error (${model}) ${res.status}: ${detail.slice(0, 300)}`);
+      return null;
+    }
 
     const json = await res.json();
     const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text;
