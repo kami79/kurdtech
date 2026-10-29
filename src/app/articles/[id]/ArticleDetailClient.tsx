@@ -76,11 +76,6 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
       setComments(article.comments || []);
       setLikesCount(article.likesCount || 0);
       addToHistory(article.id);
-      fetch("/api/analytics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId: article.id }),
-      }).catch(() => undefined);
     }
   }, [article?.id]);
 

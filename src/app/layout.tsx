@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import SearchModal from "@/components/SearchModal";
 import Toast from "@/components/Toast";
 import ScrollToTop from "@/components/ScrollToTop";
+import AnalyticsTracker from "@/components/AnalyticsTracker";
 
 const vazirmatn = Vazirmatn({
   subsets: ["arabic", "latin"],
@@ -69,6 +70,7 @@ export default function RootLayout({
           <SearchModal />
           <Toast />
           <ScrollToTop />
+          <AnalyticsTracker />
         </AppProvider>
       </body>
     </html>
