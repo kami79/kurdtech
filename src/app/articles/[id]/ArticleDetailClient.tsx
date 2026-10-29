@@ -222,7 +222,7 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
         style={{ width: `${scrollProgress}%` }}
       />
 
-      <article className="max-w-7xl mx-auto px-4 py-8 w-full space-y-10">
+      <article className="max-w-7xl mx-auto px-3.5 sm:px-4 py-5 sm:py-8 w-full space-y-6 sm:space-y-10">
         {/* Top Controls Bar: Breadcrumbs & Accessibility Font Size */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <nav className="flex items-center gap-2 text-xs text-slate-400">
@@ -425,7 +425,7 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
                   e.currentTarget.src = getCategoryFallbackImage(article.categorySlug, `${article.title} ${article.id}`);
                 }}
                 alt={article.title}
-                className="w-full h-80 sm:h-[450px] object-cover"
+                className="w-full h-60 sm:h-[450px] object-cover"
               />
               {article.reviewScore && (
                 <div className="absolute top-4 left-4 bg-slate-950/85 backdrop-blur-md border border-amber-500/40 text-amber-400 px-4 py-2 rounded-2xl font-black text-lg flex items-center gap-1.5 shadow-xl">
@@ -518,7 +518,14 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
             {/* Article Content Paragraphs with Dynamic Font Scaler */}
             <div className={`space-y-6 text-slate-800 dark:text-slate-200 transition-all ${contentFontSizeClass}`}>
               {article.content.map((paragraph, index) => (
-                <p key={index} className="leading-relaxed">
+                <p
+                  key={index}
+                  className={`leading-[2.1] ${
+                    index === 0
+                      ? "font-semibold text-slate-900 dark:text-slate-100 pr-3.5 border-r-4 border-purple-500/70"
+                      : ""
+                  }`}
+                >
                   {paragraph}
                 </p>
               ))}

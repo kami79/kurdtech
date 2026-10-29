@@ -42,7 +42,7 @@ export default function HomePage() {
   }, [articles, selectedCategory, sortOrder]);
 
   return (
-    <main className="max-w-7xl mx-auto w-full px-4 py-6 space-y-12">
+    <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-4 sm:py-6 space-y-8 sm:space-y-12">
       {/* Zoomit Bento Hero Grid */}
       <BentoGrid mainArticle={main} sideArticles={side} />
 
@@ -51,7 +51,7 @@ export default function HomePage() {
         {/* Right Column (8 Cols in RTL): Chronological & Filterable Stream */}
         <div className="lg:col-span-8 space-y-6">
           {/* Filter Bar */}
-          <div className="bg-white/90 dark:bg-[#111827]/90 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-purple-900/20 space-y-4 shadow-sm backdrop-blur-xl">
+          <div className="bg-white/90 dark:bg-[#111827]/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-200/80 dark:border-purple-900/20 space-y-3.5 sm:space-y-4 shadow-sm backdrop-blur-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
               <div className="flex items-center gap-2.5">
                 <span className="w-2.5 h-7 rounded-full bg-gradient-to-b from-purple-600 to-indigo-600 shadow-sm shadow-purple-600/40"></span>
@@ -87,7 +87,7 @@ export default function HomePage() {
               </div>
 
               {/* View Mode & Sorting Toolbar */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
                 {/* Layout Grid / List Switcher */}
                 <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
                   <button

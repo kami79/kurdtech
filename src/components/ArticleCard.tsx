@@ -143,9 +143,9 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
 
   // Standard Detailed List View
   return (
-    <article className="group bg-white dark:bg-[#111827] hover:bg-slate-50 dark:hover:bg-[#151e31] rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/90 transition-all duration-300 flex flex-col sm:flex-row gap-5 shadow-sm hover:shadow-2xl hover:border-purple-500/40">
+    <article className="group bg-white dark:bg-[#111827] hover:bg-slate-50 dark:hover:bg-[#151e31] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-200/80 dark:border-slate-800/90 transition-all duration-300 flex flex-col sm:flex-row gap-3.5 sm:gap-5 shadow-sm hover:shadow-2xl hover:border-purple-500/40 active:scale-[0.995]">
       {/* Thumbnail */}
-      <div className="relative sm:w-64 sm:h-44 h-52 shrink-0 rounded-2xl overflow-hidden">
+      <div className="relative sm:w-64 h-44 shrink-0 rounded-xl sm:rounded-2xl overflow-hidden">
         <Link href={`/articles/${article.id}`} className="block w-full h-full">
           <img
             src={getSafeImageUrl(article.imageUrl, article.categorySlug, `${article.title} ${article.id}`)}
@@ -181,7 +181,7 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
           {/* Tags & Read Time */}
           <div className="flex items-center justify-between text-[11px] text-slate-400">
             {article.tags && article.tags.length > 0 ? (
-              <div className="flex items-center gap-2 overflow-x-auto">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 {article.tags.slice(0, 3).map((tag, idx) => (
                   <span key={idx} className="hover:text-purple-600 dark:hover:text-purple-400">
                     #{tag}
@@ -224,7 +224,7 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between w-full sm:w-auto gap-3">
             <span className="flex items-center gap-1">
               <Eye className="w-3.5 h-3.5 text-slate-400" />
               {article.views}

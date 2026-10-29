@@ -40,7 +40,7 @@ export default function ScrollToTop() {
       onClick={scrollToTop}
       aria-label="گەڕانەوە بۆ سەرەوە"
       title="گەڕانەوە بۆ سەرەوەی پەڕە"
-      className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-2xl bg-white/90 dark:bg-slate-900/90 text-purple-600 dark:text-purple-400 border border-slate-200/80 dark:border-slate-800 shadow-xl backdrop-blur-xl flex items-center justify-center hover:scale-110 hover:bg-purple-600 hover:text-white dark:hover:bg-purple-600 dark:hover:text-white transition-all duration-300 group"
+      className="fixed bottom-20 lg:bottom-6 left-4 sm:right-6 sm:left-auto z-40 w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/90 dark:bg-slate-900/90 text-purple-600 dark:text-purple-400 border border-slate-200/80 dark:border-slate-800 shadow-xl backdrop-blur-xl flex items-center justify-center hover:scale-110 active:scale-95 hover:bg-purple-600 hover:text-white dark:hover:bg-purple-600 dark:hover:text-white transition-all duration-300 group"
     >
       {/* Circular Progress Ring */}
       <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 48 48">
