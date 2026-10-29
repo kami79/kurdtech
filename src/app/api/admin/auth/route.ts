@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const token = createAdminSessionToken();
-    const res = NextResponse.json({ status: "success", isAdmin: true });
+    const res = NextResponse.json({ status: "success", isAdmin: true, token });
     res.cookies.set(ADMIN_COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: "lax",
@@ -50,4 +50,3 @@ export async function DELETE() {
   res.cookies.delete(ADMIN_COOKIE_NAME);
   return res;
 }
-

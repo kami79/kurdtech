@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import { ARTICLES } from "@/data/articles";
 import { Article } from "@/types";
@@ -6,35 +7,85 @@ import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 
 /**
  * Shared JSON-file persistence for custom/deleted articles.
- * Used by both /api/articles and the news agent so every write goes through
- * the same serialized queue (prevents lost updates from concurrent requests).
+ * Works on both local disk (src/data) and read-only serverless filesystems
+ * like Vercel (automatically falls back to os.tmpdir() + in-memory cache).
  */
 
 const DATA_DIR = path.join(process.cwd(), "src", "data");
+const TMP_DATA_DIR = path.join(os.tmpdir(), "kurdtech-data");
+
 export const CUSTOM_ARTICLES_FILE = path.join(DATA_DIR, "custom-articles.json");
 export const DELETED_IDS_FILE = path.join(DATA_DIR, "deleted-articles.json");
 
+const globalStore = globalThis as unknown as {
+  __kurdtechJsonStore?: Record<string, unknown>;
+};
+if (!globalStore.__kurdtechJsonStore) {
+  globalStore.__kurdtechJsonStore = {};
+}
+
+function getTmpFallbackPath(filePath: string): string {
+  return path.join(TMP_DATA_DIR, path.basename(filePath));
+}
+
 export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
+  const key = path.basename(filePath);
+  const tmpPath = getTmpFallbackPath(filePath);
+
+  // 1. If a serverless runtime write went to /tmp, prefer the /tmp file
+  try {
+    const tmpData = await fs.readFile(tmpPath, "utf-8");
+    const parsed = JSON.parse(tmpData) as T;
+    globalStore.__kurdtechJsonStore![key] = parsed;
+    return parsed;
+  } catch {
+    // No /tmp override yet
+  }
+
+  // 2. If in-memory cache was updated in this serverless instance, return it
+  if (key in globalStore.__kurdtechJsonStore!) {
+    return globalStore.__kurdtechJsonStore![key] as T;
+  }
+
+  // 3. Read from repository src/data directory
   try {
     const data = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(data) as T;
+    const parsed = JSON.parse(data) as T;
+    globalStore.__kurdtechJsonStore![key] = parsed;
+    return parsed;
   } catch {
     return fallback;
   }
 }
 
-// Write to a temp file then rename, so a crash mid-write can't corrupt the JSON.
 export async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const key = path.basename(filePath);
+  globalStore.__kurdtechJsonStore![key] = data;
   const json = JSON.stringify(data, null, 2);
-  await fs.writeFile(tmp, json, "utf-8");
+
+  // 1. Try writing to the primary repo path (works in local development)
   try {
-    await fs.rename(tmp, filePath);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(tmp, json, "utf-8");
+    try {
+      await fs.rename(tmp, filePath);
+    } catch {
+      await fs.writeFile(filePath, json, "utf-8");
+      await fs.unlink(tmp).catch(() => undefined);
+    }
+    return;
   } catch {
-    // Windows/OneDrive can briefly lock the target; fall back to a direct write.
-    await fs.writeFile(filePath, json, "utf-8");
-    await fs.unlink(tmp).catch(() => undefined);
+    // Primary path is read-only (e.g. Vercel serverless /var/task) -> fall back to os.tmpdir()
+  }
+
+  // 2. Fallback to os.tmpdir() (/tmp/kurdtech-data) for serverless environments
+  try {
+    const tmpFallback = getTmpFallbackPath(filePath);
+    await fs.mkdir(path.dirname(tmpFallback), { recursive: true });
+    await fs.writeFile(tmpFallback, json, "utf-8");
+  } catch {
+    // In-memory globalStore.__kurdtechJsonStore still retains the data
   }
 }
 
@@ -130,4 +181,3 @@ export async function addCommentToArticle(
     return updated;
   });
 }
-

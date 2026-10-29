@@ -156,7 +156,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Load initial articles from disk/api on mount
     refreshArticles();
-    fetch("/api/admin/auth", { cache: "no-store" })
+    fetch("/api/admin/auth", {
+      cache: "no-store",
+      headers: { "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "" },
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && typeof d.isAdmin === "boolean") setIsAdmin(d.isAdmin);
@@ -274,7 +277,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/articles", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
         body: JSON.stringify(data),
       });
 
@@ -314,7 +320,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/articles", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
         body: JSON.stringify({ id, ...updates }),
       });
 
@@ -349,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`/api/articles?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers: { "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "" },
       });
 
       if (!res.ok) {
@@ -388,7 +398,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       for (const art of imported) {
         await fetch("/api/articles", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
           body: JSON.stringify(art),
         });
       }
@@ -414,12 +427,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/admin/auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
         body: JSON.stringify({ password }),
       });
       if (!res.ok) {
         showToast("وشەی نهێنی بەڕێوەبەر هەڵەیە!", "error");
         return false;
+      }
+      const data = await res.json().catch(() => null);
+      if (data?.token) {
+        try {
+          localStorage.setItem("kurdtech_admin_token", data.token);
+        } catch {}
       }
       setIsAdmin(true);
       showToast("بەخێربێیت بۆ ستۆدیۆی بەڕێوەبەرایەتی کوردتێک!", "success");
@@ -432,6 +454,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logoutAdmin = async (): Promise<void> => {
     try {
+      localStorage.removeItem("kurdtech_admin_token");
       await fetch("/api/admin/auth", { method: "DELETE" });
     } catch {}
     setIsAdmin(false);

@@ -27,9 +27,11 @@ export function verifyAdminRequest(req: NextRequest): boolean {
   const cookieToken = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
   if (isValidAdminToken(cookieToken)) return true;
 
+  const headerToken = req.headers.get("x-admin-token");
+  if (isValidAdminToken(headerToken)) return true;
+
   const headerPass = req.headers.get("x-admin-password");
   if (headerPass && headerPass === getAdminPassword()) return true;
 
   return false;
 }
-

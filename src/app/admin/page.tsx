@@ -417,7 +417,10 @@ export default function AdminStudioPage() {
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
         body: JSON.stringify({
           action: "publish-single",
           rawItem: item.raw,
@@ -469,7 +472,10 @@ export default function AdminStudioPage() {
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": localStorage.getItem("kurdtech_admin_token") || "",
+        },
         body: JSON.stringify({
           action: "auto-curate-publish",
           count: autoCurateCount,
