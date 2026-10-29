@@ -21,6 +21,7 @@ import {
   Zap,
   Image as ImageIcon,
   Link2,
+  Upload,
 } from "lucide-react";
 import { Article } from "@/types";
 import {
@@ -49,6 +50,24 @@ type PlatformTab =
 
 type CardFormat = "square" | "story";
 type CardTheme = "purple" | "breaking" | "cyber";
+
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
 
 function wrapRtlCanvasText(
   ctx: CanvasRenderingContext2D,
@@ -108,6 +127,7 @@ export default function SocialPublisherModal({
   const [showConfig, setShowConfig] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [customCaption, setCustomCaption] = useState("");
+  const [customMediaUrl, setCustomMediaUrl] = useState<string>("");
   const [isPublishingApi, setIsPublishingApi] = useState(false);
   const [publishResults, setPublishResults] = useState<
     {
@@ -117,9 +137,9 @@ export default function SocialPublisherModal({
     }[]
   >([]);
   const [isRenderingCard, setIsRenderingCard] = useState(false);
-  const [cardDataUrl, setCardDataUrl] = useState<string>("");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const notify = useCallback(
     (msg: string, type: "success" | "info" | "error" = "success") => {
@@ -136,6 +156,17 @@ export default function SocialPublisherModal({
     if (!article) return null;
     return generateSocialPosts(article, credentials.siteUrl);
   }, [article, credentials.siteUrl]);
+
+  // Active cover image URL (either custom uploaded or article's safe image URL)
+  const resolvedCoverUrl = React.useMemo(() => {
+    if (customMediaUrl) return customMediaUrl;
+    if (!article) return "";
+    return getSafeImageUrl(
+      article.imageUrl,
+      article.categorySlug,
+      `${article.id} ${article.title}`
+    );
+  }, [article, customMediaUrl]);
 
   // Update editable caption when platform or article changes
   useEffect(() => {
@@ -155,10 +186,25 @@ export default function SocialPublisherModal({
     } else {
       setCardTheme("purple");
     }
+    setCustomMediaUrl("");
     setPublishResults([]);
-  }, [article]);
+  }, [article?.id]);
 
-  // Render Branded Instagram Card (1080x1080 or 1080x1920) on Canvas
+  // Handle local image upload for custom Instagram card media
+  const handleUploadCustomMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCustomMediaUrl(reader.result);
+        notify("وێنەی نوێ بۆ کارتی سۆشیاڵ میدیا دانرا!", "success");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Render Branded Instagram Card (1080x1080 or 1080x1920) on hidden Canvas for PNG download/share
   const renderInstagramCard = useCallback(async () => {
     if (!article || !canvasRef.current) return;
     setIsRenderingCard(true);
@@ -193,38 +239,40 @@ export default function SocialPublisherModal({
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Load & Draw Article Cover Photo via Proxy (avoids CORS tainting)
-    const rawImgUrl = getSafeImageUrl(
-      article.imageUrl,
-      article.categorySlug,
-      `${article.id} ${article.title}`
-    );
-    const proxiedUrl = `/api/social/image-proxy?url=${encodeURIComponent(
-      rawImgUrl
-    )}`;
-
+    // 2. Load & Draw Article Cover Photo
     const loadImage = (src: string): Promise<HTMLImageElement | null> =>
       new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = "anonymous";
+        if (!src.startsWith("data:")) {
+          img.crossOrigin = "anonymous";
+        }
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);
         img.src = src;
       });
 
-    let loadedImg = await loadImage(proxiedUrl);
-    if (!loadedImg) {
-      const fallbackUrl = getCategoryFallbackImage(
-        article.categorySlug,
-        article.title
-      );
+    let loadedImg: HTMLImageElement | null = null;
+    if (resolvedCoverUrl.startsWith("data:")) {
+      loadedImg = await loadImage(resolvedCoverUrl);
+    } else {
       loadedImg = await loadImage(
-        `/api/social/image-proxy?url=${encodeURIComponent(fallbackUrl)}`
+        `/api/social/image-proxy?url=${encodeURIComponent(resolvedCoverUrl)}`
       );
+      if (!loadedImg) {
+        loadedImg = await loadImage(resolvedCoverUrl);
+      }
+      if (!loadedImg) {
+        const fallbackUrl = getCategoryFallbackImage(
+          article.categorySlug,
+          article.title
+        );
+        loadedImg = await loadImage(
+          `/api/social/image-proxy?url=${encodeURIComponent(fallbackUrl)}`
+        );
+      }
     }
 
     if (loadedImg) {
-      // Draw cover image occupying top 62% (square) or 58% (story)
       const imgAreaHeight =
         cardFormat === "square" ? height * 0.65 : height * 0.56;
       const scale = Math.max(
@@ -244,17 +292,17 @@ export default function SocialPublisherModal({
       ctx.restore();
     }
 
-    // 3. Smooth Multi-Stop Dark Gradient Overlay for Text Readability
+    // 3. Smooth Multi-Stop Dark Gradient Overlay
     const overlayGrad = ctx.createLinearGradient(0, 0, 0, height);
     overlayGrad.addColorStop(0, "rgba(7, 10, 22, 0.55)");
     overlayGrad.addColorStop(0.25, "rgba(7, 10, 22, 0.15)");
     overlayGrad.addColorStop(
       cardFormat === "square" ? 0.48 : 0.42,
       cardTheme === "breaking"
-        ? "rgba(28, 6, 15, 0.88)"
+        ? "rgba(28, 6, 15, 0.9)"
         : cardTheme === "cyber"
-        ? "rgba(8, 15, 32, 0.88)"
-        : "rgba(15, 9, 36, 0.88)"
+        ? "rgba(8, 15, 32, 0.9)"
+        : "rgba(15, 9, 36, 0.9)"
     );
     overlayGrad.addColorStop(
       1,
@@ -275,17 +323,15 @@ export default function SocialPublisherModal({
         ? "#38bdf8"
         : "#a855f7";
 
-    // Top Header Bar (KurdTech Logo + Category / Breaking Pill)
     const padX = 68;
     const topY = cardFormat === "square" ? 64 : 110;
 
     // KurdTech Brand Pill (Top Left)
     ctx.save();
-    ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(padX, topY, 270, 64, 32);
+    drawRoundedRect(ctx, padX, topY, 270, 64, 32);
     ctx.fill();
     ctx.stroke();
 
@@ -313,8 +359,7 @@ export default function SocialPublisherModal({
     ctx.fillStyle = article.isBreaking
       ? "rgba(225, 29, 72, 0.92)"
       : "rgba(124, 58, 237, 0.9)";
-    ctx.beginPath();
-    ctx.roundRect(width - padX - badgeW, topY, badgeW, 64, 32);
+    drawRoundedRect(ctx, width - padX - badgeW, topY, badgeW, 64, 32);
     ctx.fill();
 
     ctx.direction = "rtl";
@@ -327,10 +372,8 @@ export default function SocialPublisherModal({
     const contentStartY = cardFormat === "square" ? 560 : 940;
     const maxTextWidth = width - padX * 2;
 
-    // Accent bar on the right side
     ctx.fillStyle = accentColor;
-    ctx.beginPath();
-    ctx.roundRect(width - padX - 120, contentStartY - 36, 120, 8, 4);
+    drawRoundedRect(ctx, width - padX - 120, contentStartY - 36, 120, 8, 4);
     ctx.fill();
 
     // Draw Headline (RTL)
@@ -386,8 +429,7 @@ export default function SocialPublisherModal({
       ctx.fillStyle = "rgba(168, 85, 247, 0.16)";
       ctx.strokeStyle = "rgba(168, 85, 247, 0.45)";
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(padX, boxY, maxTextWidth, 130, 28);
+      drawRoundedRect(ctx, padX, boxY, maxTextWidth, 130, 28);
       ctx.fill();
       ctx.stroke();
 
@@ -430,24 +472,22 @@ export default function SocialPublisherModal({
     ctx.fillText("@KurdTech", padX, footerY);
     ctx.restore();
 
-    try {
-      const dataUrl = canvas.toDataURL("image/png", 0.95);
-      setCardDataUrl(dataUrl);
-    } catch (e) {
-      console.warn("Canvas export fallback", e);
-    } finally {
-      setIsRenderingCard(false);
-    }
-  }, [article, cardFormat, cardTheme]);
+    setIsRenderingCard(false);
+  }, [article, cardFormat, cardTheme, resolvedCoverUrl]);
 
   useEffect(() => {
     if ((isOpen || inlineMode) && article) {
-      const timer = setTimeout(() => {
-        renderInstagramCard();
-      }, 80);
-      return () => clearTimeout(timer);
+      renderInstagramCard();
     }
-  }, [isOpen, inlineMode, article, cardFormat, cardTheme, renderInstagramCard]);
+  }, [
+    isOpen,
+    inlineMode,
+    article,
+    cardFormat,
+    cardTheme,
+    resolvedCoverUrl,
+    renderInstagramCard,
+  ]);
 
   if ((!isOpen && !inlineMode) || !article || !posts) return null;
 
@@ -462,7 +502,8 @@ export default function SocialPublisherModal({
     }
   };
 
-  const handleDownloadCard = () => {
+  const handleDownloadCard = async () => {
+    await renderInstagramCard();
     if (!canvasRef.current) return;
     try {
       const dataUrl = canvasRef.current.toDataURL("image/png");
@@ -483,11 +524,11 @@ export default function SocialPublisherModal({
     }
   };
 
-  // Native Web Share with Image File + Caption (Ideal for Mobile Instagram / Telegram / WhatsApp)
+  // Native Web Share with Image File + Caption
   const handleNativeMobileShare = async () => {
+    await renderInstagramCard();
     if (!canvasRef.current) return;
     try {
-      // Also copy caption to clipboard so user can paste it in Instagram
       await navigator.clipboard.writeText(customCaption);
     } catch {}
 
@@ -589,6 +630,27 @@ export default function SocialPublisherModal({
       setIsPublishingApi(false);
     }
   };
+
+  const themeBgGradient =
+    cardTheme === "breaking"
+      ? "from-[#1a050d]/95 via-[#1f0610] to-[#090206]"
+      : cardTheme === "cyber"
+      ? "from-[#040d21]/95 via-[#09152e] to-[#020617]"
+      : "from-[#12082e]/95 via-[#190d3c] to-[#070514]";
+
+  const themeAccentBg =
+    cardTheme === "breaking"
+      ? "bg-amber-500"
+      : cardTheme === "cyber"
+      ? "bg-sky-400"
+      : "bg-purple-500";
+
+  const themeAccentText =
+    cardTheme === "breaking"
+      ? "text-amber-400"
+      : cardTheme === "cyber"
+      ? "text-sky-400"
+      : "text-purple-400";
 
   const innerContent = (
     <div
@@ -922,18 +984,26 @@ export default function SocialPublisherModal({
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
               <ImageIcon className="w-4 h-4 text-pink-500" />
-              <span>دیزاینی کارتی ئینستاگرام (پۆست و ستۆری)</span>
+              <span>میدیا و کارتی ئینستاگرام (پۆست و ستۆری)</span>
             </h3>
-            <button
-              type="button"
-              onClick={renderInstagramCard}
-              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 hover:underline"
-            >
-              <RefreshCw
-                className={`w-3 h-3 ${isRenderingCard ? "animate-spin" : ""}`}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUploadCustomMedia}
+                className="hidden"
               />
-              <span>نوێکردنەوە</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-2.5 py-1 rounded-lg bg-purple-600/10 hover:bg-purple-600 text-purple-600 hover:text-white text-[11px] font-bold flex items-center gap-1 transition-all"
+                title="گۆڕینی وێنەی پۆست لە کۆمپیوتەر یان مۆبایلەکەتەوە"
+              >
+                <Upload className="w-3 h-3" />
+                <span>گۆڕینی وێنە</span>
+              </button>
+            </div>
           </div>
 
           {/* Format & Theme Switcher */}
@@ -991,16 +1061,101 @@ export default function SocialPublisherModal({
             </div>
           </div>
 
-          {/* Hidden High-Res Canvas + Responsive Preview */}
-          <div className="relative flex items-center justify-center bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner min-h-[260px]">
-            <canvas
-              ref={canvasRef}
-              className={`${
+          {/* Instant Live Visual Card Preview + Hidden High-Res Export Canvas */}
+          <div className="relative flex items-center justify-center bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-xl p-2">
+            {/* Hidden 1080p Canvas used for PNG export */}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* Live Visual Preview Card (Always visible immediately) */}
+            <div
+              className={`relative overflow-hidden rounded-xl border border-white/10 shadow-2xl flex flex-col justify-between bg-gradient-to-b ${themeBgGradient} ${
                 cardFormat === "square"
-                  ? "w-full aspect-square max-w-[340px]"
-                  : "w-auto h-[360px] aspect-[9/16]"
-              } object-contain rounded-xl`}
-            />
+                  ? "w-full aspect-square max-w-[360px]"
+                  : "w-full max-w-[260px] aspect-[9/16]"
+              }`}
+            >
+              {/* Article Cover Photo Background */}
+              <div
+                className={`absolute inset-x-0 top-0 ${
+                  cardFormat === "square" ? "h-[64%]" : "h-[55%]"
+                } overflow-hidden`}
+              >
+                <img
+                  src={resolvedCoverUrl}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.src = getCategoryFallbackImage(
+                      article.categorySlug,
+                      article.title
+                    );
+                  }}
+                  alt={article.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-transparent to-slate-950" />
+              </div>
+
+              {/* Top Brand + Category Header */}
+              <div className="relative z-10 flex items-center justify-between gap-2 p-3.5">
+                <div
+                  className="px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md border border-white/15 flex items-center gap-1.5"
+                  dir="ltr"
+                >
+                  <span className={`w-2 h-2 rounded-full ${themeAccentBg}`} />
+                  <span className="text-[10px] font-black text-white tracking-wider">
+                    KURDTECH
+                  </span>
+                </div>
+
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-black text-white shadow-md ${
+                    article.isBreaking ? "bg-rose-600" : "bg-purple-600"
+                  }`}
+                >
+                  {article.isBreaking
+                    ? "🚨 هەواڵی بەپەلە"
+                    : `✨ ${article.category || "تەکنەلۆژیا"}`}
+                </span>
+              </div>
+
+              {/* Bottom Kurdish Headline & Summary */}
+              <div className="relative z-10 p-4 pt-8 space-y-2 text-right bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent">
+                <div
+                  className={`w-10 h-1 rounded-full ${themeAccentBg} mr-0 ml-auto`}
+                />
+                <h4
+                  className={`font-black text-white leading-snug ${
+                    cardFormat === "square"
+                      ? "text-sm sm:text-base line-clamp-3"
+                      : "text-xs sm:text-sm line-clamp-4"
+                  }`}
+                >
+                  {article.title}
+                </h4>
+                <p
+                  className={`text-slate-300 leading-relaxed ${
+                    cardFormat === "square"
+                      ? "text-[11px] line-clamp-2"
+                      : "text-[10px] line-clamp-3"
+                  }`}
+                >
+                  {article.excerpt}
+                </p>
+
+                {cardFormat === "story" && (
+                  <div className="py-1.5 px-2.5 rounded-lg bg-purple-500/20 border border-purple-400/30 text-[9px] font-bold text-purple-100 text-center">
+                    🔗 تەواوی هەواڵەکە لە لینکی بایۆ (Link in Bio) بخوێنەرەوە
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[9px] font-bold text-slate-400">
+                  <span>پۆڕتاڵی تەکنەلۆژیای کوردستان</span>
+                  <span className={`font-mono ${themeAccentText}`} dir="ltr">
+                    @KurdTech
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Download & Mobile Share Actions */}
@@ -1246,7 +1401,7 @@ export default function SocialPublisherModal({
                 type="button"
                 onClick={async () => {
                   await handleCopy(customCaption, "کەپشنی ئینستاگرام");
-                  handleDownloadCard();
+                  await handleDownloadCard();
                   window.open("https://www.instagram.com/", "_blank");
                 }}
                 className="p-3 rounded-2xl bg-gradient-to-r from-pink-600 via-purple-600 to-amber-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:opacity-95 transition-all"
@@ -1364,4 +1519,3 @@ export default function SocialPublisherModal({
     </div>
   );
 }
-

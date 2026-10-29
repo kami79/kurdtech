@@ -730,19 +730,24 @@ export default function AdminStudioPage() {
               </span>
             </div>
 
-            <div className="p-5 rounded-3xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-              <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
-                <span>نرخی ١$ بە دینار</span>
-                <TrendingUp className="w-4 h-4 text-sky-500" />
+            <div
+              onClick={() => {
+                if (!socialStudioArticle && articles.length > 0) {
+                  setSocialStudioArticle(articles[0]);
+                }
+                setActiveTab("social");
+              }}
+              className="p-5 rounded-3xl bg-gradient-to-br from-pink-600/15 via-purple-600/10 to-indigo-600/15 border border-pink-500/30 shadow-sm space-y-1 cursor-pointer hover:border-pink-500 transition-all"
+            >
+              <div className="flex items-center justify-between text-pink-600 dark:text-pink-400 text-xs font-bold">
+                <span>سۆشیاڵ میدیا و ئینستاگرام</span>
+                <Instagram className="w-4 h-4 text-pink-500" />
               </div>
-              <p
-                className="text-2xl font-black text-slate-900 dark:text-white"
-                dir="ltr"
-              >
-                1$ = {exchangeRate} IQD
+              <p className="text-xl font-black text-slate-900 dark:text-white">
+                ستۆدیۆی پۆست و ستۆری
               </p>
-              <span className="text-[11px] text-sky-500 font-semibold">
-                بەستراوە بە بازاڕی کوردستان
+              <span className="text-[11px] text-pink-500 font-semibold block">
+                کلیک بکە بۆ ئینستاگرام، تێلیگرام و فەیسبووک ←
               </span>
             </div>
           </div>
@@ -1205,6 +1210,26 @@ export default function AdminStudioPage() {
                         className="p-5 rounded-3xl bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-purple-500/40 transition-all"
                       >
                         <div className="space-y-3">
+                          {/* Cover Media Banner */}
+                          <div className="relative h-40 w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-900">
+                            <img
+                              src={getSafeImageUrl(
+                                item.draft.imageUrl,
+                                item.draft.categorySlug,
+                                `${item.raw.title} ${idx}`
+                              )}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.src = getCategoryFallbackImage(
+                                  item.draft.categorySlug,
+                                  `${item.raw.title} ${idx}`
+                                );
+                              }}
+                              alt={item.draft.title}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+
                           {/* Top Badges */}
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1335,6 +1360,45 @@ export default function AdminStudioPage() {
                           </div>
 
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const tempArt: Article = {
+                                  id: item.raw.id || `draft-${idx}`,
+                                  title: item.draft.title,
+                                  excerpt: item.draft.excerpt,
+                                  content: Array.isArray(item.draft.content)
+                                    ? item.draft.content
+                                    : [item.draft.excerpt],
+                                  category: item.draft.category || "هەواڵ",
+                                  categorySlug: item.draft.categorySlug || "ai",
+                                  imageUrl: getSafeImageUrl(
+                                    item.draft.imageUrl,
+                                    item.draft.categorySlug,
+                                    item.raw.title
+                                  ),
+                                  publishedAt: "ئێستا",
+                                  readTime: "٣ خولەک",
+                                  views: "١٠٠",
+                                  isBreaking: !!item.draft.isBreaking,
+                                  tags: item.draft.tags || [],
+                                  author: {
+                                    name: "ئەیجێنتی هۆشمەندی کوردتێک",
+                                    role: item.raw.sourceName,
+                                    avatar:
+                                      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                                  },
+                                };
+                                setSocialStudioArticle(tempArt);
+                                setIsSocialModalOpen(true);
+                              }}
+                              className="px-3 py-2 rounded-xl bg-pink-500/15 hover:bg-pink-600 text-pink-600 dark:text-pink-400 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all"
+                              title="ئامادەکردنی کارتی ئینستاگرام و پۆستی سۆشیاڵ میدیا"
+                            >
+                              <Instagram className="w-3.5 h-3.5" />
+                              <span>سۆشیاڵ</span>
+                            </button>
+
                             <button
                               onClick={() => handleEditDraftBeforePublish(item)}
                               className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-all"
@@ -1671,32 +1735,67 @@ export default function AdminStudioPage() {
                   </label>
                 </div>
 
-                {/* Image URL & 1-Click Presets */}
-                <div className="md:col-span-2 space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                    <span>وێنەی کەڤەر (Cover Image):</span>
+                {/* Image URL, Device Upload & 1-Click Presets */}
+                <div className="md:col-span-2 space-y-3">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between flex-wrap gap-2">
+                    <span>وێنە و میدیای کەڤەر (Cover Media):</span>
                     <span className="text-[11px] text-purple-600 font-bold">
-                      دەتوانیت کلیک لە وێنە ئامادەکراوەکانی خوارەوە بکەیت
+                      وێنە لە ئامێرەکەت باربکە، لینک دابنێ یان لە خوارەوە هەڵيبژێرە
                     </span>
                   </label>
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <input
-                      type="url"
-                      required
+                      type="text"
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="https://images.unsplash.com/... (ئارەزوومەندانە)"
                       className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm outline-none focus:border-purple-500 font-mono"
                       dir="ltr"
                     />
-                    {imageUrl && (
-                      <img
-                        src={imageUrl}
-                        alt="Cover preview"
-                        className="w-20 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                    <label className="px-4 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-purple-600/20 shrink-0 transition-all">
+                      <Upload className="w-4 h-4" />
+                      <span>بارکردنی وێنە لە ئامێرەکەت</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            if (typeof reader.result === "string") {
+                              setImageUrl(reader.result);
+                              showToast("وێنەکە بە سەرکەوتوویی بارکرا!", "success");
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
                       />
-                    )}
+                    </label>
+                  </div>
+
+                  {/* Always-Visible Media Preview Banner */}
+                  <div className="relative h-44 sm:h-52 w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-900">
+                    <img
+                      src={
+                        imageUrl.trim() ||
+                        getCategoryFallbackImage(categorySlug, title || "preview")
+                      }
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryFallbackImage(
+                          categorySlug,
+                          title || "preview"
+                        );
+                      }}
+                      alt="Cover preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-2.5 right-2.5 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md text-[11px] font-bold text-white border border-white/15">
+                      پێشبینینی وێنەی کەڤەر و کارتی سۆشیاڵ میدیا
+                    </div>
                   </div>
 
                   {/* Presets Grid */}
