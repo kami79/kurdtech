@@ -44,6 +44,9 @@ interface AppContextType {
   addBreakingNews: (text: string) => void;
   refreshArticles: (autoSync?: boolean) => Promise<void>;
   importArticles: (imported: Article[]) => Promise<boolean>;
+  isAdmin: boolean;
+  loginAdmin: (password: string) => Promise<boolean>;
+  logoutAdmin: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +65,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [articles, setArticles] = useState<Article[]>(ARTICLES);
   const [isLoadingArticles, setIsLoadingArticles] = useState(false);
   const [customBreaking, setCustomBreaking] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   // Show Toast
   const showToast = useCallback((message: string, type: "success" | "info" | "error" = "success") => {
@@ -152,6 +156,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Load initial articles from disk/api on mount
     refreshArticles();
+    fetch("/api/admin/auth", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && typeof d.isAdmin === "boolean") setIsAdmin(d.isAdmin);
+      })
+      .catch(() => undefined);
   }, [refreshArticles]);
 
   const toggleBookmark = (id: string, title?: string) => {
@@ -400,6 +410,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Array.from(new Set([...customBreaking, ...breakingFromArticles, ...BREAKING_TICKER]));
   }, [articles, customBreaking]);
 
+  const loginAdmin = async (password: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        showToast("وشەی نهێنی بەڕێوەبەر هەڵەیە!", "error");
+        return false;
+      }
+      setIsAdmin(true);
+      showToast("بەخێربێیت بۆ ستۆدیۆی بەڕێوەبەرایەتی کوردتێک!", "success");
+      return true;
+    } catch {
+      showToast("هەڵە لە پەیوەندیکردن بە سێرڤەر", "error");
+      return false;
+    }
+  };
+
+  const logoutAdmin = async (): Promise<void> => {
+    try {
+      await fetch("/api/admin/auth", { method: "DELETE" });
+    } catch {}
+    setIsAdmin(false);
+    showToast("لە ستۆدیۆی بەڕێوەبەر چوویتە دەرەوە", "info");
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -431,6 +469,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addBreakingNews,
         refreshArticles,
         importArticles,
+        isAdmin,
+        loginAdmin,
+        logoutAdmin,
       }}
     >
       {children}

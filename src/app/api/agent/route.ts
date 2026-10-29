@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 import {
   getCuratedKurdishDrafts,
   publishDraftToPortal,
@@ -53,6 +54,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!verifyAdminRequest(request)) {
+    return NextResponse.json(
+      { status: "error", message: "ڕێگەپێنەدراوە؛ تەنها بەڕێوەبەر دەتوانێت ئەم کردارە بکات" },
+      { status: 401 }
+    );
+  }
   try {
     const body = await request.json();
     const { action, rawItem, overrides, draft, count = 3, apiKey } = body;

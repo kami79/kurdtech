@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ARTICLES } from "@/data/articles";
 import { Article } from "@/types";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 import {
   CUSTOM_ARTICLES_FILE,
   DELETED_IDS_FILE,
@@ -150,6 +151,12 @@ export async function GET(request: NextRequest) {
 
 // POST /api/articles - Create new article or news
 export async function POST(request: NextRequest) {
+  if (!verifyAdminRequest(request)) {
+    return NextResponse.json(
+      { status: "error", message: "ڕێگەپێنەدراوە؛ تەنها بەڕێوەبەر دەتوانێت بابەت بڵاوبکاتەوە" },
+      { status: 401 }
+    );
+  }
   try {
     const body = await request.json();
     const input = sanitizeArticleInput(body);
@@ -233,6 +240,12 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/articles - Update existing article
 export async function PUT(request: NextRequest) {
+  if (!verifyAdminRequest(request)) {
+    return NextResponse.json(
+      { status: "error", message: "ڕێگەپێنەدراوە؛ تەنها بەڕێوەبەر دەتوانێت دەستکاری بکات" },
+      { status: 401 }
+    );
+  }
   try {
     const body = await request.json();
     const id = isStr(body?.id) ? body.id : "";
@@ -293,6 +306,12 @@ export async function PUT(request: NextRequest) {
 
 // DELETE /api/articles - Delete article
 export async function DELETE(request: NextRequest) {
+  if (!verifyAdminRequest(request)) {
+    return NextResponse.json(
+      { status: "error", message: "ڕێگەپێنەدراوە؛ تەنها بەڕێوەبەر دەتوانێت بابەت بسڕێتەوە" },
+      { status: 401 }
+    );
+  }
   try {
     const { searchParams } = new URL(request.url);
     let id = searchParams.get("id");

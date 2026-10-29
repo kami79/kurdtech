@@ -30,6 +30,7 @@ export default function Header() {
     refreshArticles,
     isLoadingArticles,
     showToast,
+    isAdmin,
   } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -136,10 +137,10 @@ export default function Header() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </button>
 
-          {/* Admin Studio Quick Link */}
+          {/* Admin Studio Quick Link (Visible ONLY to authenticated Admin) */}
           <Link
             href="/admin"
-            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-purple-500/15 text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 text-xs font-bold border border-slate-200 dark:border-slate-700/80 transition-all shadow-sm"
+            className={isAdmin ? "hidden lg:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-purple-500/15 text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 text-xs font-bold border border-slate-200 dark:border-slate-700/80 transition-all shadow-sm" : "hidden"}
             title="ستۆدیۆی نووسەران و بەڕێوەبردن"
           >
             <PlusCircle className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />

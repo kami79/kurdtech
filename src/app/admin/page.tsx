@@ -106,11 +106,16 @@ export default function AdminStudioPage() {
     setExchangeRate,
     refreshArticles,
     importArticles,
+    isAdmin,
+    loginAdmin,
+    logoutAdmin,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<"articles" | "create" | "agent" | "analytics" | "backup">("articles");
   const [editorMode, setEditorMode] = useState<"quick" | "full">("quick");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Search & Filter state for articles list
   const [searchQuery, setSearchQuery] = useState("");
@@ -488,6 +493,69 @@ export default function AdminStudioPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-8 w-full space-y-8">
       {/* Breadcrumbs */}
+      {!isAdmin ? (
+        <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
+            <ShieldCheck className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              چوونەژوورەوەی بەڕێوەبەر
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              ئەم بەشە تەنها تایبەتە بە بەڕێوەبەرانی کوردتێک. تکایە وشەی نهێنی بەڕێوەبەر بنووسە بۆ کردنەوەی ستۆدیۆ و ئامارەکان.
+            </p>
+          </div>
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!adminPasswordInput.trim()) return;
+              setIsLoggingIn(true);
+              const ok = await loginAdmin(adminPasswordInput);
+              setIsLoggingIn(false);
+              if (ok) setAdminPasswordInput("");
+            }}
+            className="space-y-4 text-right"
+          >
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                وشەی نهێنی بەڕێوەبەر (Admin Password):
+              </label>
+              <input
+                type="password"
+                required
+                autoFocus
+                value={adminPasswordInput}
+                onChange={(e) => setAdminPasswordInput(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:border-purple-500 font-mono text-center"
+                dir="ltr"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-purple-600/30 transition-all disabled:opacity-50"
+            >
+              {isLoggingIn ? "پشکنین دەکرێت..." : "چوونەژوورەوە بۆ ستۆدیۆ"}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Link
+              href="/"
+              className="text-xs font-bold text-slate-400 hover:text-purple-600 transition-colors"
+            >
+              گەڕانەوە بۆ پەڕەی سەرەکی ماڵپەڕ
+            </Link>
+          </div>
+        </div>
+      ) : (
+      <>
+      <div className="flex items-center justify-between gap-4">
       <nav className="flex items-center gap-2 text-xs text-slate-400">
         <Link href="/" className="hover:text-purple-600 transition-colors">
           سەرەتا
@@ -498,6 +566,14 @@ export default function AdminStudioPage() {
         </span>
       </nav>
 
+      <button
+        type="button"
+        onClick={logoutAdmin}
+        className="px-3.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white text-xs font-bold transition-all"
+      >
+        چوونەدەرەوە (Logout)
+      </button>
+      </div>
       {/* Header Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-3xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
@@ -1694,6 +1770,8 @@ export default function AdminStudioPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </main>
   );

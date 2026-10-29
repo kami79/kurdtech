@@ -117,8 +117,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/admin" className="hover:text-white transition-colors">
-                  ستۆدیۆی نووسەران
+                <Link href="/prices" className="hover:text-white transition-colors">
+                  نرخی ڕۆژانەی بازاڕ
                 </Link>
               </li>
               <li>
