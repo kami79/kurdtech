@@ -1,6 +1,10 @@
-import { RawNewsItem } from "./feedParser";
+import {
+  RawNewsItem,
+  enrichRawNewsItemWithFullArticle,
+  splitIntoSentencesSafe,
+  trimToCompleteSentences,
+} from "./feedParser";
 import { getSafeImageUrl } from "@/lib/imageUtils";
-import { Article } from "@/types";
 
 export interface TranslatedArticleDraft {
   title: string;
@@ -71,7 +75,8 @@ const TECH_ENTITIES: { en: string; ku: string; type: "company" | "person" | "pro
   { en: "Elon Musk", ku: "ئیلۆن مەسک", type: "person" },
   { en: "Musk", ku: "ئیلۆن مەسک", type: "person" },
   { en: "Sam Altman", ku: "سام ئاڵتمان", type: "person" },
-  { en: "Tim Cook", ku: "تێم کووک", type: "person" },
+  { en: "Tim Cook", ku: "تیم کووک", type: "person" },
+  { en: "Steve Jobs", ku: "ستیڤ جۆبز", type: "person" },
   { en: "Mark Zuckerberg", ku: "مارک زوکەربێرگ", type: "person" },
   { en: "Sundar Pichai", ku: "سوندەر پیچای", type: "person" },
   { en: "Satya Nadella", ku: "ساتیا نادێلا", type: "person" },
@@ -91,7 +96,7 @@ const TECH_ENTITIES: { en: string; ku: string; type: "company" | "person" | "pro
   { en: "ChatGPT", ku: "چات جی پی تی (ChatGPT)", type: "product" },
   { en: "GPT-4o", ku: "مۆدێلی GPT-4o", type: "product" },
   { en: "GPT-5", ku: "مۆدێلی GPT-5", type: "product" },
-  { en: "Gemini", ku: "مۆدێلی جێمینای (Gemini)", type: "product" },
+  { en: "Gemini", ku: "جێمینای (Gemini)", type: "product" },
   { en: "Blackwell", ku: "تەلارسازیی بلاکوێڵ (Blackwell)", type: "product" },
   { en: "iPhone", ku: "ئایفۆن", type: "product" },
   { en: "iPhone Duo", ku: "ئایفۆن دوۆ (iPhone Duo)", type: "product" },
@@ -112,16 +117,7 @@ const CATEGORY_NAMES = {
   kurdistan: "تەکنەلۆژیا لە کوردستان",
 };
 
-const CATEGORY_DEFAULT_IMAGES = {
-  ai: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1000&auto=format&fit=crop&q=80",
-  mobile: "https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=1000&auto=format&fit=crop&q=80",
-  hardware: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1000&auto=format&fit=crop&q=80",
-  gaming: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1000&auto=format&fit=crop&q=80",
-  science: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1000&auto=format&fit=crop&q=80",
-  kurdistan: "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1000&auto=format&fit=crop&q=80",
-};
-
-// Pre-process tricky English tech idioms so neural machine translation produces idiomatic Kurdish
+// Pre-process tricky English idioms & journalistic expressions so neural translation produces natural human Sorani Kurdish
 function preProcessEnglishText(text: string): string {
   if (!text) return "";
   return text
@@ -129,42 +125,72 @@ function preProcessEnglishText(text: string): string {
     .replace(/\bwalk-in purchase\b/gi, "direct in-store purchase")
     .replace(/\bwalk-in\b/gi, "in-store")
     .replace(/\bmight be challenging\b/gi, "may be difficult")
-    .replace(/\bper report\b/gi, "according to report")
+    .replace(/\bper report\b/gi, "according to a new report")
     .replace(/\bdefault model provider\b/gi, "primary default model provider")
-    .replace(/\bdefault over Anthropic\b/gi, "primary default over Anthropic")
-    .replace(/\bscraping concerns\b/gi, "data scraping concerns")
-    .replace(/\bAI training concerns\b/gi, "AI training data concerns")
+    .replace(/\bdefault over Anthropic\b/gi, "primary default choice instead of Anthropic")
+    .replace(/\bscraping concerns\b/gi, "data collection concerns")
+    .replace(/\bAI training concerns\b/gi, "AI model training concerns")
     .replace(/\bdocumentary account\b/gi, "documentary film account")
     .replace(/\bcommunity guidelines\b/gi, "community rules")
-    .replace(/\bteardown\b/gi, "hardware analysis")
+    .replace(/\bteardown\b/gi, "hardware internal analysis")
     .replace(/\brollout\b/gi, "official release")
     .replace(/\broll out\b/gi, "officially release")
     .replace(/\bdiscontinued\b/gi, "stopped manufacturing")
+    .replace(/\beyebrows were raised\b/gi, "many people were surprised")
+    .replace(/\braised eyebrows\b/gi, "caused surprise")
+    .replace(/\bdid a U-turn on\b/gi, "completely reversed its position on")
+    .replace(/\bU-turn on\b/gi, "complete reversal on")
+    .replace(/\bboasts top benchmark scores\b/gi, "achieves top benchmark results")
+    .replace(/\bboasts\b/gi, "features")
+    .replace(/\bunder the hood\b/gi, "internally")
+    .replace(/\bhands-on\b/gi, "practical experience")
+    .replace(/\bcool again with younger generations\b/gi, "popular again among younger generations")
+    .replace(/\bcool with younger generations\b/gi, "popular among younger generations")
+    .replace(/\bstuck around\b/gi, "remained popular")
+    .replace(/\bnever looked back\b/gi, "continued using them")
+    .replace(/\bkill pointless meetings\b/gi, "cancel unnecessary meetings")
+    .replace(/\bkilling pointless meetings\b/gi, "canceling unnecessary meetings")
+    .replace(/\bhigh-stakes gamble\b/gi, "major strategic investment")
+    .replace(/\bbig, expensive gamble\b/gi, "major, costly strategic move")
+    .replace(/\bstep function leap\b/gi, "significant leap forward")
+    .replace(/\bwell underway\b/gi, "actively progressing")
+    .replace(/\s*(?:more…|more\.\.\.|Read more|Continue reading)\s*$/gi, "")
     .trim();
 }
 
-// Clean and polish Kurdish text, replacing Arabic letters and known machine-translation mistakes
+// Clean and polish Kurdish text for natural human Sorani grammar, typography, and tech accuracy
 export function cleanTechTermsInKurdish(text: string): string {
   if (!text) return "";
   let cleaned = text
     // Normalize Kurdish alphabet
     .replace(/ك/g, "ک")
     .replace(/ي/g, "ی")
-    // Fix common translation mistakes in Kurdish
+    .replace(/ى/g, "ی")
+    .replace(/ة/g, "ە")
+    // Fix common awkward machine-translation idioms into natural Sorani Kurdish
     .replace(/کڕینی بەپێ/g, "کڕینی ڕاستەوخۆ لە فرۆشگاکاندا")
     .replace(/کڕین بە شێوەی ڕۆیشتن/g, "کڕینی ڕاستەوخۆ لە فرۆشگاکاندا")
-    .replace(/بە شێوەی ڕۆیشتن/g, "ڕاستەوخۆ لە فرۆشگاکاندا (Walk-in)")
-    .replace(/مۆدێلی شکستخواردوو/g, "مۆدێلی بنەڕەتی (دیفۆڵت)")
+    .replace(/بە شێوەی ڕۆیشتن/g, "ڕاستەوخۆ لە فرۆشگاکاندا")
+    .replace(/مۆدێلی شکستخواردوو/g, "مۆدێلی بنەڕەتی (Default)")
     .replace(/پێشوەختە لە ئەنترۆپیک/g, "مۆدێلی بنەڕەتی لەبری ئەنترۆپیک")
     .replace(/دەکاتە پێشوەختە/g, "دەکاتە هەڵبژاردەی بنەڕەتی")
-    .replace(/مۆدێلی پێشوەختە/g, "مۆدێلی بنەڕەتی (Default)")
+    .replace(/مۆدێلی پێشوەختە/g, "مۆدێلی بنەڕەتی")
     .replace(/لە کاتی نمایشکردنیدا/g, "لە کاتی خستنەبازاڕیدا")
     .replace(/ڕۆژی نمایشکردنیدا|لە ڕۆژی نمایشکردن|ڕۆژی نمایشکردن/g, "ڕۆژی خستنەبازاڕیدا")
-    .replace(/نیگەرانییەکانی لە خراپکردن/g, "نیگەرانییەکان دەربارەی کۆکردنەوەی داتا (Scraping)")
+    .replace(/نیگەرانییەکانی لە خراپکردن|نیگەرانییەکانی داتاکانی ڕاهێنانی خراپکردن/g, "نیگەرانییەکان دەربارەی کۆکردنەوەی داتا")
     .replace(/ڕاهێنانی AI/g, "ڕاهێنانی زیرەکی دەستکرد (AI)")
-    .replace(/دۆکیۆمێنتاریی/g, "فیلمی دۆکیۆمێنتاری")
-    .replace(/دیکۆمێنتاریی/g, "فیلمی دۆکیۆمێنتاری")
+    .replace(/دۆکیۆمێنتاریی|دیکۆمێنتاریی/g, "فیلمی دۆکیۆمێنتاری")
     .replace(/فیلمی\s+فیلمی/g, "فیلمی")
+    .replace(/برۆکان بەرز ببنەوە/g, "جێگەی سەرسوڕمان بێت")
+    .replace(/فێنک و ساردن/g, "سەرنجڕاکێش و باون")
+    .replace(/کوشتنی کۆبوونەوە/g, "هەڵوەشاندنەوەی کۆبوونەوە")
+    .replace(/قومارە گەورە و گرانبەهای/g, "هەنگاوە ستراتیژی و گەورەکەی")
+    .replace(/شانازی بە نمرەی سەرەوەی پێوەرەکانەوە دەکات/g, "لە تاقیکردنەوە پێوانەییەکاندا بەرزترین نمرەی تۆمار کردووە")
+    .replace(/کۆمپانیای Gemini/g, "مۆدێلی Gemini")
+    // Clean up spacing around Kurdish punctuation
+    .replace(/\s+،/g, "،")
+    .replace(/،([^\s])/g, "، $1")
+    .replace(/\s+\./g, ".")
     .replace(/\s*(?:more…|more\.\.\.|زیاتر…|زیاتر\.\.\.)\s*$/gi, "")
     .replace(/-\s*کەی ئای تی ئێن/g, "")
     .replace(/-\s*رووداو/g, "")
@@ -175,7 +201,7 @@ export function cleanTechTermsInKurdish(text: string): string {
   return cleaned;
 }
 
-// Call Google's high-fidelity Sorani Kurdish Neural translation endpoint
+// Call Google's Sorani Kurdish Neural translation endpoint
 export async function translateSentenceToSorani(text: string): Promise<string | null> {
   if (!text || text.trim().length === 0) return null;
 
@@ -203,7 +229,6 @@ export async function translateSentenceToSorani(text: string): Promise<string | 
         const translatedRaw = data[0].map((segment: any) => segment[0]).join("");
         if (translatedRaw && translatedRaw.length > 2) {
           const polished = cleanTechTermsInKurdish(translatedRaw);
-          // Verify it contains Kurdish characters
           if (/[\u0600-\u06FF]/.test(polished)) {
             return polished;
           }
@@ -217,7 +242,7 @@ export async function translateSentenceToSorani(text: string): Promise<string | 
   return null;
 }
 
-// Deep fact, metric, entity and quote extractor from the collected news
+// Extract specific entities, numbers, specs and real highlights from the story
 export function extractStoryMetricsAndDetails(item: RawNewsItem): {
   metrics: string[];
   companies: string[];
@@ -226,7 +251,6 @@ export function extractStoryMetricsAndDetails(item: RawNewsItem): {
   price?: string;
   specs: string[];
   quotes: string[];
-  structuredBullets: string[];
 } {
   const fullText = `${item.title} ${item.snippet} ${(item.contentParagraphs || []).join(" ")}`;
   const metrics: string[] = [];
@@ -236,7 +260,6 @@ export function extractStoryMetricsAndDetails(item: RawNewsItem): {
   const products: string[] = [];
   const quotes: string[] = [];
 
-  // 1. Identify specific companies, figures, and products from entity list
   for (const ent of TECH_ENTITIES) {
     const regex = new RegExp(`\\b${ent.en}\\b`, "i");
     if (regex.test(fullText)) {
@@ -250,27 +273,23 @@ export function extractStoryMetricsAndDetails(item: RawNewsItem): {
     }
   }
 
-  // 2. Match prices and financial figures ($999, $1.5 billion, €400, etc.)
   const priceMatches = fullText.match(
     /\$[\d,]+(?:\.\d+)?(?:\s*(?:billion|million|trillion|B|M))?|€[\d,]+|£[\d,]+/gi
   );
   const price = priceMatches ? priceMatches[0] : undefined;
   if (price) {
-    metrics.push(`بەهای دارایی / نرخ: ${price}`);
+    metrics.push(`بەها / تێچوو: ${price}`);
   }
 
-  // 3. Match percentages, speedups, and multipliers (e.g. 45%, 2.5x, 30% boost)
   const percentMatches = fullText.match(
     /\b\d+%\s*(?:faster|increase|boost|more|reduction|gain|drop)?|\b\d+(?:\.\d+)?x\s*(?:faster|more|performance|boost)?/gi
   );
   if (percentMatches) {
-    const uniquePercents = Array.from(new Set(percentMatches)).slice(0, 2);
-    uniquePercents.forEach((p) => {
-      metrics.push(`ڕێژەی گۆڕانکاری یان ئەدا: ${p.trim()}`);
-    });
+    Array.from(new Set(percentMatches))
+      .slice(0, 2)
+      .forEach((p) => metrics.push(`ڕێژەی گۆڕانکاری: ${p.trim()}`));
   }
 
-  // 4. Match hardware metrics (nanometers, Hz, MP, mAh, RAM/VRAM, charging)
   const specPatterns = [
     /\b\d+\s*nm\b/gi,
     /\b\d+\s*Hz\b/gi,
@@ -289,107 +308,79 @@ export function extractStoryMetricsAndDetails(item: RawNewsItem): {
   }
 
   if (specs.length > 0) {
-    metrics.push(`پێوەرە تەکنیکییەکان: ${specs.slice(0, 4).join(" • ")}`);
+    metrics.push(`تایبەتمەندی تەکنیکی: ${specs.slice(0, 4).join(" • ")}`);
   }
 
-  // 5. Match direct quotes from executives or reports ("...")
   const quoteMatches = fullText.match(/“([^”]{15,140})”|"([^"]{15,140})"/g);
   if (quoteMatches) {
     quoteMatches.slice(0, 2).forEach((q) => {
       const cleanQuote = q.replace(/^[“"]|[”"]$/g, "").trim();
-      if (cleanQuote.length > 15) {
-        quotes.push(cleanQuote);
-      }
+      if (cleanQuote.length > 15) quotes.push(cleanQuote);
     });
   }
 
-  // 6. Build Rich, Structured Kurdish Highlights (Zero generic filler!)
-  const structuredBullets: string[] = [];
-
-  // Bullet 1: Source & Official Attribution
-  structuredBullets.push(
-    `🔹 بڵاوکراوەی سەرەکی: ڕاپۆرتی فەرمی و دەستپێشخەری لەلایەن ${item.sourceName}.`
-  );
-
-  // Bullet 2: Entities & Key People
-  if (people.length > 0 && companies.length > 0) {
-    structuredBullets.push(
-      `🔹 کەسایەتی و کۆمپانیا بەشدارەکان: دەستنیشانکراوە بۆ ${people.slice(0, 2).join(" و ")} لە کۆمپانیای ${companies.slice(0, 2).join(" و ")}.`
-    );
-  } else if (companies.length > 0) {
-    structuredBullets.push(
-      `🔹 لایەن و پلاتفۆرمە بەشدارەکان: جەختکردنەوە لەسەر ڕۆڵی ${companies.slice(0, 3).join(" و ")}.`
-    );
-  } else if (people.length > 0) {
-    structuredBullets.push(
-      `🔹 کەسایەتییە دیارەکان: ڕۆڵی سەرەکیی ${people.slice(0, 2).join(" و ")} لەم بابەتەدا.`
-    );
-  }
-
-  // Bullet 3: Real Numbers, Specs or Pricing
-  if (price) {
-    structuredBullets.push(`🔹 بەها و ئاستی نرخ: ئاماژەدان بە نرخی فەرمیی ${price}.`);
-  } else if (specs.length > 0) {
-    structuredBullets.push(`🔹 دیارترین تایبەتمەندییە تەکنیکییەکان: ${specs.join(" ، ")}.`);
-  } else if (products.length > 0) {
-    structuredBullets.push(`🔹 بەرهەم و ئامێرە ئامانجکراوەکان: تایبەتە بە ${products.slice(0, 3).join(" و ")}.`);
-  }
-
-  // Bullet 4: Key Event or Context Specific
-  if (item.title.toLowerCase().includes("ban") || item.title.toLowerCase().includes("block")) {
-    structuredBullets.push(
-      `🔹 جۆری ڕێکار: قەدەغەکردن یان بەربەستکردنی ڕاستەوخۆی پلاتفۆرمەکە لەبەر سەرپێچی ڕێساکان.`
-    );
-  } else if (item.title.toLowerCase().includes("default") || item.title.toLowerCase().includes("replace")) {
-    structuredBullets.push(
-      `🔹 گۆڕانکاریی بنەڕەتی: گۆڕینی مۆدێلی کارکردن و بەستنی هاوبەشیی ستراتیژی لە نێوان پلاتفۆرمەکان.`
-    );
-  } else if (item.title.toLowerCase().includes("walk-in") || item.title.toLowerCase().includes("launch")) {
-    structuredBullets.push(
-      `🔹 ڕێنمایی بۆ کڕیاران: ڕەنگە دەستکەوتنی ئامێرەکە پێویستی بە داواکاری پێشوەختە (Pre-order) بێت.`
-    );
-  } else if (item.title.toLowerCase().includes("scraping") || item.title.toLowerCase().includes("terms")) {
-    structuredBullets.push(
-      `🔹 پاراستنی داتا و ڕێسا: پێداچوونەوە بە مەرجەکانی بەکارهێنان و شێوازی ڕاهێنانی مۆدێلەکان.`
-    );
-  }
-
-  return { metrics, companies, people, products, price, specs, quotes, structuredBullets };
+  return { metrics, companies, people, products, price, specs, quotes };
 }
 
-// Built-in High-Accuracy Neural Kurdish Translation Engine
-export async function translateWithNeuralKurdishEngine(
+function classifyArticleCategory(
   item: RawNewsItem
-): Promise<TranslatedArticleDraft> {
-  const details = extractStoryMetricsAndDetails(item);
+): "ai" | "mobile" | "gaming" | "hardware" | "kurdistan" | "science" {
+  const titleAndTags = `${item.title} ${(item.feedTags || []).join(" ")}`.toLowerCase();
+  const fullText = `${titleAndTags} ${item.snippet}`.toLowerCase();
 
-  // 1. Translate the Title with High Precision into Sorani Kurdish
-  let kurdishTitle = await translateSentenceToSorani(item.title);
-  if (!kurdishTitle) {
-    const brand = details.companies[0] || details.products[0] || item.sourceName;
-    kurdishTitle = `نوێترین زانیاری لەسەر ${brand}؛ وردەکاری نوێ لە ${item.sourceName}ەوە`;
+  if (
+    titleAndTags.includes("iphone") ||
+    titleAndTags.includes("ios") ||
+    titleAndTags.includes("ipad") ||
+    titleAndTags.includes("galaxy") ||
+    titleAndTags.includes("android") ||
+    titleAndTags.includes("pixel") ||
+    titleAndTags.includes("smartphone")
+  ) {
+    return "mobile";
   }
 
-  // 2. Translate Core Snippet / Lead Paragraph
-  let kurdishSnippet = await translateSentenceToSorani(item.snippet);
-  if (!kurdishSnippet) {
-    kurdishSnippet = `بەپێی ڕاپۆرتی تایبەت لەلایەن سەرچاوەی جیهانیی ${item.sourceName}، نوێترین پێشهات و وردەکاری دەربارەی ئەم بابەتە ئاشکرا کراوە کە دەبێتە جێگەی سەرنجی بەکارهێنەران و شارەزایان.`;
+  if (
+    titleAndTags.includes("macbook") ||
+    titleAndTags.includes("imac") ||
+    titleAndTags.includes("mac mini") ||
+    titleAndTags.includes("oled") ||
+    titleAndTags.includes("gpu") ||
+    titleAndTags.includes("nvidia") ||
+    titleAndTags.includes("rtx") ||
+    titleAndTags.includes("chip") ||
+    titleAndTags.includes("processor") ||
+    titleAndTags.includes("tsmc") ||
+    titleAndTags.includes("qualcomm") ||
+    titleAndTags.includes("intel") ||
+    titleAndTags.includes("amd") ||
+    titleAndTags.includes("earbuds") ||
+    titleAndTags.includes("headphones")
+  ) {
+    return "hardware";
   }
 
-  // 3. Translate Paragraph 2 and Paragraph 3 directly from the source feed if available
-  let kurdishPara2: string | null = null;
-  let kurdishPara3: string | null = null;
-
-  if (item.contentParagraphs && item.contentParagraphs.length > 1) {
-    kurdishPara2 = await translateSentenceToSorani(item.contentParagraphs[1]);
+  if (
+    titleAndTags.includes("playstation") ||
+    titleAndTags.includes("xbox") ||
+    titleAndTags.includes("nintendo") ||
+    titleAndTags.includes("steam") ||
+    /\bgaming\b|\bgame\b/i.test(titleAndTags)
+  ) {
+    return "gaming";
   }
-  if (item.contentParagraphs && item.contentParagraphs.length > 2) {
-    kurdishPara3 = await translateSentenceToSorani(item.contentParagraphs[2]);
-  }
 
-  // 4. Determine Accurate Category
-  const fullText = (item.title + " " + item.snippet + " " + (item.feedTags || []).join(" ")).toLowerCase();
-  let categorySlug: "ai" | "mobile" | "gaming" | "hardware" | "kurdistan" | "science" = item.categorySlug;
+  if (
+    titleAndTags.includes("spacex") ||
+    titleAndTags.includes("starlink") ||
+    titleAndTags.includes("nasa") ||
+    titleAndTags.includes("satellite") ||
+    titleAndTags.includes("science") ||
+    titleAndTags.includes("study") ||
+    titleAndTags.includes("research")
+  ) {
+    return "science";
+  }
 
   if (
     /\bai\b/i.test(fullText) ||
@@ -399,95 +390,113 @@ export async function translateWithNeuralKurdishEngine(
     fullText.includes("chatgpt") ||
     fullText.includes("gemini") ||
     fullText.includes("deepseek") ||
-    /\bllm\b/i.test(fullText) ||
-    /\bmodel\b/i.test(fullText)
+    /\bllm\b/i.test(fullText)
   ) {
-    categorySlug = "ai";
-  } else if (
-    fullText.includes("iphone") ||
-    fullText.includes("galaxy") ||
-    fullText.includes("android") ||
-    fullText.includes("smartphone") ||
-    fullText.includes("pixel") ||
-    /\bios\b/i.test(fullText)
-  ) {
-    categorySlug = "mobile";
-  } else if (
-    fullText.includes("gpu") ||
-    fullText.includes("nvidia") ||
-    fullText.includes("rtx") ||
-    fullText.includes("chip") ||
-    fullText.includes("processor") ||
-    fullText.includes("tsmc") ||
-    fullText.includes("qualcomm") ||
-    fullText.includes("intel")
-  ) {
-    categorySlug = "hardware";
-  } else if (
-    fullText.includes("playstation") ||
-    fullText.includes("xbox") ||
-    fullText.includes("game") ||
-    fullText.includes("nintendo") ||
-    fullText.includes("steam")
-  ) {
-    categorySlug = "gaming";
+    return "ai";
   }
 
+  return item.categorySlug;
+}
+
+// Built-in Full-Essay Kurdish Translation Engine (Translates the real source paragraphs directly without repetitive templates)
+export async function translateWithNeuralKurdishEngine(
+  rawItem: RawNewsItem
+): Promise<TranslatedArticleDraft> {
+  // 1. Fetch full article paragraphs from the original source URL if RSS only had a short teaser
+  const item = await enrichRawNewsItemWithFullArticle(rawItem);
+  const details = extractStoryMetricsAndDetails(item);
+  const categorySlug = classifyArticleCategory(item);
   const categoryName = CATEGORY_NAMES[categorySlug];
 
-  // 5. Construct Paragraph 3 & Paragraph 4 with Zero Generic Phone-Shop Boilerplate
-  let paragraph3 = "";
-  if (kurdishPara2) {
-    paragraph3 = `لە درێژەی ڕاپۆرتەکەدا هاتووە: «${kurdishPara2}». ئەم زانیارییە شیکارییە تیشک دەخاتە سەر لایەنە نەبینراوەکانی ئەم بڕیارە و چۆنیەتی جێبەجێکردنی لە ئاستی بازاڕە نێودەوڵەتییەکاندا.`;
-  } else if (categorySlug === "ai") {
-    paragraph3 = `شارەزایانی بواری زیرەکی دەستکرد پێیان وایە کە ئەم هەنگاوە نوێیە کێبڕکێی نێوان گەورە مۆدێلە پێشکەوتووەکان توندتر دەکاتەوە، بە تایبەت لە ڕووی خێرایی وەڵامدانەوە، تێچووی API بۆ گەشەپێدەران و ئاستی تێگەیشتن لە فەرمانە ئاڵۆزەکان.`;
-  } else if (categorySlug === "mobile") {
-    paragraph3 = `بەپێی شیکارییە مەیدانییەکان، بەهۆی بەرزیی خواستی کڕیاران لە سەرەتای بڵاوبوونەوەی مۆبایل و ئامێرە ئاڵاهەڵگرەکاندا، زنجیرەی دابینکردن ڕووبەڕووی سنوورداریی دەبێتەوە؛ بۆیە فرۆشگا سەرەکییەکان پێشینە دەدەن بەو بەکارهێنەرانەی پێشوەختە ناوی خۆیان تۆمار کردووە (Pre-order).`;
-  } else if (categorySlug === "hardware") {
-    paragraph3 = `شیکەرەوە تەکنیکییەکان ئاماژە بەوە دەکەن کە پەرەپێدانی ئەم تەلارسازییە کاریگەری ڕاستەوخۆی دەبێت لەسەر بەرزکردنەوەی توانای چارەسەرکردنی داتا و کەمکردنەوەی گەرمبوونی چیپسێتەکان لە ژێر باری قورسی کارپێکردندا.`;
-  } else {
-    paragraph3 = `چاودێران ئاماژە بەوە دەکەن کە ئەم بڕیارە گۆڕانکاری لە سیاسەتی کارکردنی کۆمپانیاکە نیشان دەدات و ڕەنگە کاردانەوەی فراوانی بەکارهێنەران و ڕێکخراوە چاودێرییەکان بەدوای خۆیدا بهێنێت.`;
+  // 2. Prepare all real source paragraphs (up to 6 substantial paragraphs from the original article)
+  let sourceParagraphs = (item.contentParagraphs || [])
+    .map((p) => p.trim())
+    .filter((p) => p.length > 35);
+
+  if (sourceParagraphs.length === 0 && item.snippet) {
+    sourceParagraphs = [item.snippet];
   }
 
-  let paragraph4 = "";
-  if (kurdishPara3) {
-    paragraph4 = `بەپێی هەڵسەنگاندنی کۆتایی ڕاپۆرتەکە: «${kurdishPara3}». تیمی تەکنیکیی کوردتێک (KurdTech) لە نزیکەوە چاودێری ئەم بابەتە دەکات و خوێنەران لە هەر پێشهاتێکی نوێ ئاگادار دەکاتەوە. (سەرچاوە: ${item.sourceName})`;
-  } else {
-    paragraph4 = `تیمی کوردتێک (KurdTech) بەردەوام دەبێت لە بەدواداچوونی ورد بۆ لێکەوتەکانی ئەم هەواڵە و چۆنیەتی دەستگەیشتنی بەکارهێنەرانی کوردستان بەم تایبەتمەندی و ئامێرە نوێیانە، تا بە باشترین شێوە سوودمەند بن لە نوێترین شۆڕشە تەکنەلۆژییەکان. (سەرچاوە: ${item.sourceName})`;
+  // If the feed/page only had 1 very long block, split it cleanly on sentence boundaries
+  if (sourceParagraphs.length === 1 && sourceParagraphs[0].length > 260) {
+    const sentences = splitIntoSentencesSafe(sourceParagraphs[0]);
+    if (sentences.length >= 4) {
+      const third = Math.ceil(sentences.length / 3);
+      sourceParagraphs = [
+        sentences.slice(0, third).join(" "),
+        sentences.slice(third, third * 2).join(" "),
+        sentences.slice(third * 2).join(" "),
+      ].filter(Boolean);
+    } else if (sentences.length >= 2) {
+      const mid = Math.ceil(sentences.length / 2);
+      sourceParagraphs = [
+        sentences.slice(0, mid).join(" "),
+        sentences.slice(mid).join(" "),
+      ].filter(Boolean);
+    }
   }
 
-  // 6. Build Content Paragraphs
-  const contentParagraphs: string[] = [
-    // Paragraph 1: Rich Announcement with Source Attribution
-    `لە ڕاپۆرتێکی نوێ و وردی ماڵپەڕی جیهانیی ${item.sourceName}دا هاتووە: «${kurdishSnippet}». ئەم پێشهاتە بووەتە جێگەی باس و لێکۆڵینەوەی چڕ لە ناوەندە تەکنەلۆژییە جیهانییەکاندا.`,
+  // 3. Translate Title and all Source Paragraphs in parallel into natural Sorani Kurdish
+  const [translatedTitle, ...translatedParagraphsRaw] = await Promise.all([
+    translateSentenceToSorani(item.title),
+    ...sourceParagraphs.slice(0, 6).map((p) => translateSentenceToSorani(p)),
+  ]);
 
-    // Paragraph 2: Unique Factual Takeaways Bullet Box
-    `📌 گرنگترین خاڵ و وردەکارییە دەستنیشانکراوەکانی ئەم بابەتە:\n${details.structuredBullets.join("\n")}`,
+  const kurdishTitle =
+    translatedTitle ||
+    `${details.companies[0] || details.products[0] || item.sourceName}: ${item.title}`;
 
-    // Paragraph 3: Deep Technical / Source Paragraph
-    paragraph3,
+  const contentParagraphs = translatedParagraphsRaw
+    .filter((p): p is string => Boolean(p && p.trim().length > 20))
+    .map((p) => cleanTechTermsInKurdish(p));
 
-    // Paragraph 4: Analytical Conclusion
-    paragraph4,
-  ];
+  // Ensure excerpt is a clean, complete 1-2 sentence summary from the first translated paragraph
+  const kurdishExcerpt =
+    contentParagraphs.length > 0
+      ? trimToCompleteSentences(contentParagraphs[0], 340)
+      : (await translateSentenceToSorani(item.snippet)) || kurdishTitle;
 
-  // 7. Dynamic Tags based on Entities and Source
+  if (contentParagraphs.length === 0) {
+    contentParagraphs.push(kurdishExcerpt);
+  }
+
+  // Add source attribution naturally at the end of the final paragraph without robotic repetition
+  const lastIdx = contentParagraphs.length - 1;
+  if (lastIdx >= 0 && !contentParagraphs[lastIdx].includes(item.sourceName)) {
+    contentParagraphs[lastIdx] = `${contentParagraphs[lastIdx]} (سەرچاوە: ${item.sourceName})`;
+  }
+
+  // 4. Build real key takeaways from actual translated sentences / metrics (no generic template bullets)
+  const realTakeaways: string[] = [];
+  if (contentParagraphs.length > 1) {
+    contentParagraphs.slice(0, 3).forEach((p) => {
+      const firstSentence = trimToCompleteSentences(p, 160);
+      if (firstSentence && !realTakeaways.includes(firstSentence)) {
+        realTakeaways.push(firstSentence);
+      }
+    });
+  }
+  if (details.metrics.length > 0) {
+    realTakeaways.push(...details.metrics.slice(0, 2));
+  }
+
+  // 5. Dynamic Tags based on Entities and Category
   const tags: string[] = ["تەکنەلۆژیا", item.sourceName];
   if (details.companies.length > 0) tags.push(...details.companies.slice(0, 2));
+  if (details.products.length > 0) tags.push(...details.products.slice(0, 2));
   if (details.people.length > 0) tags.push(...details.people.slice(0, 1));
   if (categorySlug === "ai") tags.push("زیرەکی دەستکرد", "AI");
   if (categorySlug === "mobile") tags.push("مۆبایل", "ئامێری زیرەک");
   if (categorySlug === "hardware") tags.push("ڕەقەواڵە", "چیپسێت");
-  if (categorySlug === "gaming") tags.push("یارییە ڤیدیۆییەکان", "گەمەکان");
+  if (categorySlug === "gaming") tags.push("یارییە ڤیدیۆییەکان", "گەیمینگ");
+  if (categorySlug === "science") tags.push("زانست", "تۆڕ و بۆشایی");
 
   const uniqueTags = Array.from(new Set(tags)).slice(0, 6);
-
-  // 8. Breaking news threshold
-  const isBreaking = (item.importanceScore || 0) >= 80;
+  const isBreaking = (item.importanceScore || 0) >= 82;
 
   return {
     title: kurdishTitle,
-    excerpt: kurdishSnippet,
+    excerpt: kurdishExcerpt,
     content: contentParagraphs,
     category: categoryName,
     categorySlug,
@@ -495,57 +504,54 @@ export async function translateWithNeuralKurdishEngine(
     imageUrl: getSafeImageUrl(item.imageUrl, categorySlug, `${item.title} ${item.id}`),
     isBreaking,
     author: {
-      name: "ئەیجێنتی هۆشمەندی کوردتێک",
-      role: `شیکەرەوەی ئۆتۆماتیکی (${item.sourceName})`,
+      name: item.originalAuthor ? `${item.originalAuthor} (${item.sourceName})` : "دەستەی نووسەرانی کوردتێک",
+      role: `ڕاپۆرتی وەرگێڕدراو لە ${item.sourceName}`,
       avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
     },
     originalSource: {
       name: item.sourceName,
       url: item.originalLink,
     },
-    extractedMetrics: details.structuredBullets.length > 0 ? details.structuredBullets : details.metrics,
+    extractedMetrics: realTakeaways.slice(0, 4),
   };
 }
 
 // Gemini AI Translation (When API Key is provided)
 async function translateWithGemini(
-  item: RawNewsItem,
+  rawItem: RawNewsItem,
   apiKey: string
 ): Promise<TranslatedArticleDraft | null> {
   try {
+    const item = await enrichRawNewsItemWithFullArticle(rawItem);
     const details = extractStoryMetricsAndDetails(item);
 
-    const prompt = `You are the Senior Chief Editor of "KurdTech" (کوردتێک), the premier Kurdish tech publication.
-Write an authentic, professional, and comprehensive news article in fluent Sorani Kurdish (زمانی پاراوی کوردیی سۆرانی).
+    const prompt = `You are a senior human journalist and native Sorani Kurdish editor at "KurdTech" (کوردتێک).
+Translate and adapt the following technology article from ${item.sourceName} into a complete, natural, fluent, grammatically impeccable Sorani Kurdish (زمانی کوردیی سۆرانیی پاراو و سروشتی) essay that faithfully preserves all details, facts, quotes, and technical explanations from the original source.
 
 Source Metadata:
 - Source: ${item.sourceName} (${item.originalLink})
+- Author: ${item.originalAuthor || item.sourceName}
 - Original Title: ${item.title}
-- Summary/Snippet: ${item.snippet}
-- Extracted Entities & Metrics: ${details.metrics.join(", ") || "N/A"}
-- Full Source Paragraphs:
+- Full Source Article Paragraphs:
 ${item.contentParagraphs.join("\n\n")}
 
-CRITICAL EDITORIAL GUIDELINES:
-1. "title": Must be 100% natural, fluent Sorani Kurdish. Do NOT leave untranslated English phrases or awkward literal translations. (e.g. translate "iPhone Duo walk-in purchases might be challenging at launch" to "ڕەنگە کڕینی ڕاستەوخۆی ئایفۆن دوۆ لە فرۆشگاکاندا لە کاتی خستنەبازاڕدا سەخت بێت").
-2. "excerpt": A rich 2-3 sentence Kurdish summary explaining the who, what, and concrete details.
-3. "content": An array of 3-4 comprehensive Kurdish paragraphs:
-   - Paragraph 1: Detailed breakdown of the announcement with attribution to ${item.sourceName} and key figures.
-   - Paragraph 2: Specific numbers, specs, pricing, or quotes directly from the source text.
-   - Paragraph 3: Contextual impact, developer/consumer relevance, and technological implications.
-4. "keyHighlights": Array of 3-4 bullet points in Kurdish listing the concrete facts, numbers, entities, or dates.
-5. "categorySlug": One of ["ai", "mobile", "gaming", "hardware", "science", "gaming"].
-6. "tags": 4-6 Kurdish/English tags.
-7. "isBreaking": boolean (true if major breaking industry news).
+STRICT EDITORIAL RULES:
+1. Write like a skilled human Kurdish tech journalist. NEVER use repetitive boilerplate templates such as "لە ڕاپۆرتێکی نوێ و وردی ماڵپەڕی جیهانیی..." or "ئەم پێشهاتە بووەتە جێگەی باس و لێکۆڵینەوەی چڕ..." or "تیمی کوردتێک بەردەوام دەبێت...".
+2. Translate the actual paragraphs of the source article faithfully into 4 to 6 rich, detailed, well-structured Sorani Kurdish paragraphs ("content" array).
+3. Use natural Sorani Kurdish sentence structure, proper izafe (ی / ـی), accurate punctuation, and natural Kurdish equivalents for English idioms.
+4. "title": Natural, compelling Sorani Kurdish headline faithful to the original title.
+5. "excerpt": 2-3 fluent Kurdish sentences summarizing the core news and why it matters.
+6. "keyHighlights": 3-4 specific factual takeaways directly from the article.
+7. "categorySlug": One of ["ai", "mobile", "gaming", "hardware", "science"].
 
-Strictly output valid JSON:
+Output valid JSON only:
 {
-  "title": "سەردێڕی پاراوی کوردی",
-  "excerpt": "پوختەی هەواڵەکە بە کوردی",
-  "content": ["پەرەگرافی یەکەم", "پەرەگرافی دووەم", "پەرەگرافی سێیەم"],
+  "title": "سەردێڕی کوردی",
+  "excerpt": "پوختەی بابەتەکە",
+  "content": ["پەرەگرافی یەکەم...", "پەرەگرافی دووەم...", "پەرەگرافی سێیەم...", "پەرەگرافی چوارەم..."],
   "keyHighlights": ["خاڵی یەکەم", "خاڵی دووەم", "خاڵی سێیەم"],
-  "categorySlug": "ai",
-  "tags": ["AI", "تەکنەلۆژیا"],
+  "categorySlug": "hardware",
+  "tags": ["تەکنەلۆژیا", "Apple"],
   "isBreaking": false
 }`;
 
@@ -556,13 +562,12 @@ Strictly output valid JSON:
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Send the key as a header so it never appears in URLs/proxy logs
           "x-goog-api-key": apiKey,
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.25,
+            temperature: 0.2,
             responseMimeType: "application/json",
           },
         }),
@@ -582,39 +587,42 @@ Strictly output valid JSON:
     if (!candidateText) return null;
 
     const parsed = JSON.parse(candidateText);
+    const fullContent: string[] = Array.isArray(parsed.content)
+      ? parsed.content.map((p: string) => cleanTechTermsInKurdish(p)).filter(Boolean)
+      : [];
 
-    const fullContent: string[] = [];
-    if (parsed.content && Array.isArray(parsed.content)) {
-      fullContent.push(...parsed.content);
-    }
-    if (parsed.keyHighlights && Array.isArray(parsed.keyHighlights) && parsed.keyHighlights.length > 0) {
-      const bullets = parsed.keyHighlights.map((h: string) => `• ${h}`).join("\n");
-      fullContent.splice(1, 0, `🔹 گرنگترین خاڵ و وردەکارییە ئاشکراکراوەکان:\n${bullets}`);
-    }
+    if (fullContent.length === 0) return null;
+
+    const catSlug = (parsed.categorySlug || classifyArticleCategory(item)) as
+      | "ai"
+      | "mobile"
+      | "gaming"
+      | "hardware"
+      | "kurdistan"
+      | "science";
 
     return {
       title: cleanTechTermsInKurdish(parsed.title),
       excerpt: cleanTechTermsInKurdish(parsed.excerpt),
-      content: fullContent.map((p) => cleanTechTermsInKurdish(p)),
-      categorySlug: parsed.categorySlug || item.categorySlug,
-      category: CATEGORY_NAMES[parsed.categorySlug as keyof typeof CATEGORY_NAMES] || item.defaultCategory,
+      content: fullContent,
+      categorySlug: catSlug,
+      category: CATEGORY_NAMES[catSlug] || item.defaultCategory,
       tags: parsed.tags || ["تەکنەلۆژیا", item.sourceName],
-      imageUrl: getSafeImageUrl(
-        item.imageUrl,
-        parsed.categorySlug || item.categorySlug,
-        `${item.title} ${item.id}`
-      ),
+      imageUrl: getSafeImageUrl(item.imageUrl, catSlug, `${item.title} ${item.id}`),
       isBreaking: !!parsed.isBreaking,
       author: {
-        name: "ئەیجێنتی هۆشمەندی کوردتێک",
-        role: `شیکەرەوەی هەواڵە جیهانییەکان (${item.sourceName})`,
+        name: item.originalAuthor ? `${item.originalAuthor} (${item.sourceName})` : "دەستەی نووسەرانی کوردتێک",
+        role: `ڕاپۆرتی وەرگێڕدراو لە ${item.sourceName}`,
         avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
       },
       originalSource: {
         name: item.sourceName,
         url: item.originalLink,
       },
-      extractedMetrics: details.structuredBullets.length > 0 ? details.structuredBullets : details.metrics,
+      extractedMetrics:
+        Array.isArray(parsed.keyHighlights) && parsed.keyHighlights.length > 0
+          ? parsed.keyHighlights.map((h: string) => cleanTechTermsInKurdish(h))
+          : details.metrics,
     };
   } catch (err: any) {
     console.warn("Gemini translation error, falling back to neural engine:", err.message);

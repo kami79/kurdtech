@@ -22,22 +22,93 @@ export interface RawNewsItem {
   importanceScore?: number;
 }
 
-// Clean HTML tags and decode basic XML entities
+// Clean HTML tags and decode XML/HTML entities
 export function stripHtml(html: string): string {
   if (!html) return "";
   return html
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<figure[^>]*>[\s\S]*?<\/figure>/gi, " ")
+    .replace(/<figcaption[^>]*>[\s\S]*?<\/figcaption>/gi, " ")
+    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, " ")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#039;|&apos;|&#8217;|&#8216;/gi, "'")
+    .replace(/&#8220;|&#8221;/gi, '"')
+    .replace(/&#8211;|&#8212;|&mdash;|&ndash;/gi, " - ")
+    .replace(/&#038;|&#38;/gi, "&")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/\b(?:Read more|Continue reading|more…|more\.\.\.|Comments)\s*$/gi, "")
+    .replace(/The post .* appeared first on .*/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+// Trim text cleanly at a sentence boundary instead of cutting mid-word
+export function trimToCompleteSentences(text: string, maxChars: number = 480): string {
+  const cleaned = text.replace(/\s*(?:more…|more\.\.\.|\[…\]|\[\.\.\.\])\s*$/gi, "").trim();
+  if (cleaned.length <= maxChars) return cleaned;
+
+  const slice = cleaned.slice(0, maxChars);
+  // Find last sentence-ending punctuation followed by space or end (not a decimal like 27.3)
+  const sentenceEndMatch = slice.match(/^([\s\S]*?[^\d][.!?])(?:\s|$)/);
+  if (sentenceEndMatch && sentenceEndMatch[1].length >= 90) {
+    return sentenceEndMatch[1].trim();
+  }
+
+  // Otherwise cut cleanly at the last word boundary
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 80 ? slice.slice(0, lastSpace) : slice).trim();
+}
+
+// Split a long paragraph into natural multi-sentence chunks without splitting version numbers (e.g. iOS 27.3)
+export function splitIntoSentencesSafe(text: string): string[] {
+  if (!text) return [];
+  // Protect decimal numbers and common abbreviations before splitting
+  const protectedText = text
+    .replace(/(\d)\.(\d)/g, "$1__DEC__$2")
+    .replace(/\b(U\.S|U\.K|Dr|Mr|Ms|Prof|Inc|Co|Ltd|vs|v)\./gi, "$1__DOT__");
+
+  const rawSentences = protectedText
+    .split(/(?<=[.!?])\s+(?=[A-Z"“‘0-9])/)
+    .map((s) =>
+      s
+        .replace(/__DEC__/g, ".")
+        .replace(/__DOT__/g, ".")
+        .trim()
+    )
+    .filter((s) => s.length > 20);
+
+  return rawSentences.length > 0
+    ? rawSentences
+    : [text.replace(/__DEC__/g, ".").replace(/__DOT__/g, ".").trim()];
+}
+
+function isBoilerplateParagraph(p: string): boolean {
+  const lower = p.toLowerCase();
+  return (
+    p.length < 45 ||
+    lower.includes("subscribe to") ||
+    lower.includes("sign up for") ||
+    lower.includes("newsletter") ||
+    lower.includes("privacy policy") ||
+    lower.includes("terms of service") ||
+    lower.includes("all rights reserved") ||
+    lower.includes("appeared first on") ||
+    lower.includes("affiliate commission") ||
+    lower.includes("if you buy something") ||
+    lower.includes("related:") ||
+    lower.includes("read more:") ||
+    lower.startsWith("image:") ||
+    lower.startsWith("photo:") ||
+    lower.startsWith("credit:") ||
+    lower.startsWith("update ") ||
+    lower.startsWith("ftc: we use income")
+  );
 }
 
 // Extract image url from RSS/Atom block (handles both raw XML and HTML-escaped content)
@@ -80,6 +151,79 @@ function extractImageUrl(block: string): string | undefined {
   }
 
   return undefined;
+}
+
+// Fetch the original article webpage to extract full-length journalistic paragraphs when the RSS feed only has a short teaser
+export async function enrichRawNewsItemWithFullArticle(item: RawNewsItem): Promise<RawNewsItem> {
+  if (!item.originalLink || item.contentParagraphs.length >= 5) {
+    return item;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(item.originalLink, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      next: { revalidate: 3600 },
+    });
+
+    clearTimeout(timeout);
+    if (!res.ok) return item;
+
+    const html = await res.text();
+
+    // Extract og:image if feed item was missing a cover photo
+    let imageUrl = item.imageUrl;
+    if (!imageUrl) {
+      const ogImgMatch =
+        /<meta[^>]+property=["']og:image["'][^>]+content=["'](https?:\/\/[^"']+)["']/i.exec(html) ||
+        /<meta[^>]+content=["'](https?:\/\/[^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
+      if (ogImgMatch?.[1]) {
+        imageUrl = ogImgMatch[1].replace(/&amp;|&#038;/g, "&").trim();
+      }
+    }
+
+    // Isolate <article> or <main> body if available to avoid sidebar/footer noise
+    const articleBlockMatch =
+      /<article[\s>]([\s\S]*?)<\/article>/i.exec(html) ||
+      /<main[\s>]([\s\S]*?)<\/main>/i.exec(html);
+    const targetHtml = articleBlockMatch ? articleBlockMatch[1] : html;
+
+    // Extract all <p> tags
+    const pMatches = targetHtml.match(/<p(?:\s[^>]*)?>[\s\S]*?<\/p>/gi) || [];
+    const extractedParagraphs: string[] = [];
+
+    for (const pHtml of pMatches) {
+      const clean = stripHtml(pHtml);
+      if (!isBoilerplateParagraph(clean) && !extractedParagraphs.includes(clean)) {
+        extractedParagraphs.push(clean);
+      }
+      if (extractedParagraphs.length >= 8) break;
+    }
+
+    if (extractedParagraphs.length >= 2) {
+      return {
+        ...item,
+        imageUrl: imageUrl || item.imageUrl,
+        snippet: trimToCompleteSentences(extractedParagraphs[0], 420),
+        contentParagraphs: extractedParagraphs.slice(0, 7),
+        rawContent: extractedParagraphs.join("\n\n"),
+      };
+    }
+
+    return {
+      ...item,
+      imageUrl: imageUrl || item.imageUrl,
+    };
+  } catch {
+    return item;
+  }
 }
 
 // Parse an XML string from an RSS or Atom feed
@@ -133,41 +277,48 @@ export function parseRssOrAtomXml(xml: string, source: TechNewsSource): RawNewsI
     const descBlock = /<(?:description|summary)[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:description|summary)>/i.exec(block);
 
     const fullSourceText = rawContentBlock ? rawContentBlock[1] : descBlock ? descBlock[1] : "";
-    const rawContent = stripHtml(fullSourceText) || title;
-    const snippet = descBlock ? stripHtml(descBlock[1]).slice(0, 320) : rawContent.slice(0, 320);
+    const decodedSourceHtml = fullSourceText
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&amp;/gi, "&");
+
+    const rawContent = stripHtml(decodedSourceHtml) || title;
+    const rawDesc = descBlock ? stripHtml(descBlock[1]) : rawContent;
+    const snippet = trimToCompleteSentences(rawDesc, 420);
 
     // Extract genuine story paragraphs
     let contentParagraphs: string[] = [];
-    if (fullSourceText) {
-      contentParagraphs = fullSourceText
-        .split(/<\/p>|<br\s*\/?>|\n\n|\r\n\r\n/gi)
+    if (decodedSourceHtml) {
+      contentParagraphs = decodedSourceHtml
+        .split(/<\/p>|<br\s*\/?>\s*<br\s*\/?>|\n\n|\r\n\r\n/gi)
         .map((p) => stripHtml(p))
-        .filter(
-          (p) =>
-            p.length > 35 &&
-            !p.toLowerCase().includes("subscribe") &&
-            !p.toLowerCase().includes("sign up") &&
-            !p.toLowerCase().includes("cookie") &&
-            !p.toLowerCase().includes("all rights reserved") &&
-            !p.toLowerCase().includes("appeared first on")
-        )
-        .slice(0, 6);
+        .filter((p) => !isBoilerplateParagraph(p))
+        .slice(0, 7);
     }
 
-    // If only 1 paragraph was extracted and it's rich, split on sentence boundary
-    if (contentParagraphs.length === 1 && contentParagraphs[0].length > 180) {
-      const sentences = contentParagraphs[0].match(/[^.!?]+[.!?]+(?:\s|$)/g);
-      if (sentences && sentences.length >= 2) {
+    // If only 1 long paragraph was extracted from RSS, split cleanly on safe sentence boundaries
+    if (contentParagraphs.length === 1 && contentParagraphs[0].length > 220) {
+      const sentences = splitIntoSentencesSafe(contentParagraphs[0]);
+      if (sentences.length >= 4) {
+        const third = Math.ceil(sentences.length / 3);
+        contentParagraphs = [
+          sentences.slice(0, third).join(" "),
+          sentences.slice(third, third * 2).join(" "),
+          sentences.slice(third * 2).join(" "),
+        ].filter(Boolean);
+      } else if (sentences.length >= 2) {
         const mid = Math.ceil(sentences.length / 2);
         contentParagraphs = [
-          sentences.slice(0, mid).join(" ").trim(),
-          sentences.slice(mid).join(" ").trim(),
-        ];
+          sentences.slice(0, mid).join(" "),
+          sentences.slice(mid).join(" "),
+        ].filter(Boolean);
       }
     }
 
     if (contentParagraphs.length === 0 && rawContent) {
-      contentParagraphs = [rawContent.slice(0, 600)];
+      contentParagraphs = [trimToCompleteSentences(rawContent, 500)];
     }
 
     // Image
