@@ -752,6 +752,58 @@ export default function AdminStudioPage() {
             </div>
           </div>
 
+          {/* Always-Visible Instagram & Social Media Quick-Launch Bar */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-950 via-fuchsia-950 to-indigo-950 border border-pink-500/35 text-white shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 via-purple-500 to-amber-500 flex items-center justify-center shrink-0 shadow-lg">
+                <Instagram className="w-6 h-6 text-white" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-black">
+                    بڵاوکردنەوەی هەواڵ و میدیا لە ئینستاگرام و تۆڕە کۆمەڵایەتییەکان
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-pink-500/25 border border-pink-400/40 text-pink-200 text-[10px] font-black">
+                    Instagram • Telegram • Facebook • X • WhatsApp
+                  </span>
+                </div>
+                <p className="text-xs text-purple-200/85">
+                  دروستکردنی کارتی ئینستاگرام (پۆست 1:1 و ستۆری 9:16)، بارکردنی وێنە و بڵاوکردنەوەی خۆکار لە هەموو کەناڵەکانتەوە
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!socialStudioArticle && articles.length > 0) {
+                    setSocialStudioArticle(articles[0]);
+                  }
+                  setActiveTab("social");
+                }}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-amber-500 hover:opacity-95 text-white font-black text-xs flex items-center gap-2 shadow-lg transition-all"
+              >
+                <Instagram className="w-4 h-4" />
+                <span>کردنەوەی ستۆدیۆی ئینستاگرام و سۆشیاڵ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!socialStudioArticle && articles.length > 0) {
+                    setSocialStudioArticle(articles[0]);
+                  }
+                  setIsSocialModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-all"
+              >
+                <Share2 className="w-3.5 h-3.5 text-pink-300" />
+                <span>پۆستی خێرا بۆ دوایین هەواڵ</span>
+              </button>
+            </div>
+          </div>
+
           {/* Tabs Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex items-center gap-1.5 text-xs font-bold overflow-x-auto pb-1 sm:pb-0">

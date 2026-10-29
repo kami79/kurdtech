@@ -128,7 +128,7 @@ export function buildHashtags(article: Article): string[] {
         .trim()
         .replace(/^#+/, "")
         .replace(/\s+/g, "_")
-        .replace(/[^\p{L}\p{N}_]/gu, "");
+        .replace(/[^\w\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g, "");
       return cleaned ? `#${cleaned}` : "";
     })
     .filter(Boolean);
@@ -168,7 +168,8 @@ export function generateSocialPosts(
     article.pros.slice(0, 3).forEach((p) => keyBullets.push(p.trim()));
   } else if (paragraphs.length > 1) {
     paragraphs.slice(1, 3).forEach((p) => {
-      const firstSentence = p.split(/(?<=[.؟!])\s+/)[0] || p;
+      const match = p.match(/^[^.؟!]+[.؟!]?/);
+      const firstSentence = match ? match[0] : p;
       const trimmed =
         firstSentence.length > 160
           ? `${firstSentence.slice(0, 157).trim()}...`
