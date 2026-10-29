@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import SearchModal from "@/components/SearchModal";
 import Toast from "@/components/Toast";
 import ScrollToTop from "@/components/ScrollToTop";
+import { Analytics } from "@vercel/analytics/next";
 
 const vazirmatn = Vazirmatn({
   subsets: ["arabic", "latin"],
@@ -70,6 +71,7 @@ export default function RootLayout({
           <Toast />
           <ScrollToTop />
         </AppProvider>
+        <Analytics />
       </body>
     </html>
   );
