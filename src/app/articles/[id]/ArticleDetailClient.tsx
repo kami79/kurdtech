@@ -29,6 +29,7 @@ import { useApp } from "@/context/AppContext";
 import ArticleCard from "@/components/ArticleCard";
 import MarketPricesWidget from "@/components/MarketPricesWidget";
 import { Comment } from "@/types";
+import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 
 export default function ArticleDetailClient({ articleId }: { articleId?: string }) {
   const params = useParams();
@@ -75,6 +76,11 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
       setComments(article.comments || []);
       setLikesCount(article.likesCount || 0);
       addToHistory(article.id);
+      fetch("/api/analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: article.id }),
+      }).catch(() => undefined);
     }
   }, [article?.id]);
 
@@ -418,7 +424,11 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
             {/* Main Featured Image */}
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200/50 dark:border-slate-800">
               <img
-                src={article.imageUrl}
+                src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+                }}
                 alt={article.title}
                 className="w-full h-80 sm:h-[450px] object-cover"
               />
@@ -713,7 +723,11 @@ export default function ArticleDetailClient({ articleId }: { articleId?: string 
                     className="group flex items-start gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                   >
                     <img
-                      src={rel.imageUrl}
+                      src={getSafeImageUrl(rel.imageUrl, rel.categorySlug)}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryFallbackImage(rel.categorySlug);
+                      }}
                       alt={rel.title}
                       className="w-20 h-16 rounded-xl object-cover shrink-0 group-hover:scale-105 transition-transform"
                     />

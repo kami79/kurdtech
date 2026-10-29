@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { ARTICLES } from "@/data/articles";
 import { Article } from "@/types";
+import { getSafeImageUrl } from "@/lib/imageUtils";
 
 /**
  * Shared JSON-file persistence for custom/deleted articles.
@@ -74,7 +75,10 @@ export async function getMergedArticles(): Promise<Article[]> {
     (art) => !deleted.has(art.id) && !customMap.has(art.id)
   );
 
-  return [...Array.from(customMap.values()), ...remainingDefaults];
+  return [...Array.from(customMap.values()), ...remainingDefaults].map((art) => ({
+    ...art,
+    imageUrl: getSafeImageUrl(art.imageUrl, art.categorySlug),
+  }));
 }
 
 export async function findArticle(id: string): Promise<Article | undefined> {

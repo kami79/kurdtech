@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { ARTICLES, BREAKING_TICKER, DEFAULT_EXCHANGE_RATE } from "@/data/articles";
 import { Article } from "@/types";
+import { getSafeImageUrl } from "@/lib/imageUtils";
 
 interface ToastInfo {
   id: number;
@@ -138,7 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (savedCachedArticles) {
         const parsed = JSON.parse(savedCachedArticles);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setArticles(parsed);
+          setArticles(parsed.map((a: Article) => ({ ...a, imageUrl: getSafeImageUrl(a.imageUrl, a.categorySlug) })));
         }
       }
       const savedBreaking = localStorage.getItem("kurdtech_custom_breaking");

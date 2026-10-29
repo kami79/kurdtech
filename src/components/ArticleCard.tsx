@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Article } from "@/types";
+import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 import { useApp } from "@/context/AppContext";
 
 interface ArticleCardProps {
@@ -43,7 +44,11 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
           <div className="relative h-48 w-full overflow-hidden">
             <Link href={`/articles/${article.id}`} className="block w-full h-full">
               <img
-                src={article.imageUrl}
+                src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+                }}
                 alt={article.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
@@ -143,7 +148,11 @@ export default function ArticleCard({ article, viewMode = "list" }: ArticleCardP
       <div className="relative sm:w-64 sm:h-44 h-52 shrink-0 rounded-2xl overflow-hidden">
         <Link href={`/articles/${article.id}`} className="block w-full h-full">
           <img
-            src={article.imageUrl}
+            src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+            }}
             alt={article.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />

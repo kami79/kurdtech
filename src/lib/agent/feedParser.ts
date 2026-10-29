@@ -156,7 +156,8 @@ export function parseRssOrAtomXml(xml: string, source: TechNewsSource): RawNewsI
     }
 
     // Image
-    const imageUrl = extractImageUrl(block);
+    const rawImg = extractImageUrl(block);
+    const imageUrl = rawImg ? rawImg.replace(/&#038;|&#38;|&amp;/g, "&").trim() : undefined;
 
     const id = `${source.id}-${Math.abs(hashString(title + originalLink))}`;
 

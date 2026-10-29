@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Star, Clock, MessageSquare, Bookmark, BookmarkCheck, Flame, Sparkles } from "lucide-react";
 import { Article } from "@/types";
+import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 import { useApp } from "@/context/AppContext";
 
 interface BentoGridProps {
@@ -21,7 +22,11 @@ export default function BentoGrid({ mainArticle, sideArticles }: BentoGridProps)
         <div className="lg:col-span-7 group relative h-[400px] sm:h-[500px] rounded-3xl overflow-hidden border border-slate-200/40 dark:border-purple-900/30 shadow-xl hover:shadow-2xl hover:shadow-purple-600/20 transition-all duration-500">
           <Link href={`/articles/${mainArticle.id}`} className="block w-full h-full">
             <img
-              src={mainArticle.imageUrl}
+              src={getSafeImageUrl(mainArticle.imageUrl, mainArticle.categorySlug)}
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = getCategoryFallbackImage(mainArticle.categorySlug);
+              }}
               alt={mainArticle.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
             />
@@ -122,7 +127,11 @@ export default function BentoGrid({ mainArticle, sideArticles }: BentoGridProps)
             >
               <Link href={`/articles/${story.id}`} className="block w-full h-full">
                 <img
-                  src={story.imageUrl}
+                  src={getSafeImageUrl(story.imageUrl, story.categorySlug)}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.src = getCategoryFallbackImage(story.categorySlug);
+                  }}
                   alt={story.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                 />

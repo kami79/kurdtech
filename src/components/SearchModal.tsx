@@ -15,6 +15,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { getSafeImageUrl, getCategoryFallbackImage } from "@/lib/imageUtils";
 import { ARTICLES, KURDISTAN_MARKET_PRICES, CATEGORIES } from "@/data/articles";
 
 export default function SearchModal() {
@@ -237,7 +238,11 @@ export default function SearchModal() {
                     className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 flex items-center gap-4 transition-all group"
                   >
                     <img
-                      src={article.imageUrl}
+                      src={getSafeImageUrl(article.imageUrl, article.categorySlug)}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryFallbackImage(article.categorySlug);
+                      }}
                       alt={article.title}
                       className="w-16 h-16 rounded-xl object-cover shrink-0 group-hover:scale-105 transition-transform"
                     />
